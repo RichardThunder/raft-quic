@@ -1,0 +1,81 @@
+version: "3.8"
+
+# Three-node Raft-over-QUIC cluster.
+#
+# Each container uses the same internal port layout (7001/UDP for QUIC,
+# 8001/TCP for the HTTP management API) so the image is identical for every
+# node.  External port mapping separates them on the Docker host:
+#
+#   node1 → host:8001   node2 → host:8002   node3 → host:8003
+#
+# Usage:
+#   docker compose up --build -d
+#   docker compose ps
+#   docker compose down
+
+services:
+  node1:
+    build: .
+    container_name: raft-node1
+    hostname: node1
+    command:
+      - -id=node1
+      - -bind=0.0.0.0:7001
+      - -advertise=node1:7001
+      - -http=0.0.0.0:8001
+    ports:
+      - "8001:8001"
+    networks:
+      - raft-net
+    restart: unless-stopped
+    healthcheck:
+      # The node is "healthy" once it has elected a leader.
+      test: ["CMD", "wget", "-qO-", "http://localhost:8001/status"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  node2:
+    build: .
+    container_name: raft-node2
+    hostname: node2
+    command:
+      - -id=node2
+      - -bind=0.0.0.0:7001
+      - -advertise=node2:7001
+      - -http=0.0.0.0:8001
+      - -join=node1:8001
+      - -join-retries=15
+    ports:
+      - "8002:8001"
+    networks:
+      - raft-net
+    depends_on:
+      node1:
+        condition: service_healthy
+    restart: unless-stopped
+
+  node3:
+    build: .
+    container_name: raft-node3
+    hostname: node3
+    command:
+      - -id=node3
+      - -bind=0.0.0.0:7001
+      - -advertise=node3:7001
+      - -http=0.0.0.0:8001
+      - -join=node1:8001
+      - -join-retries=15
+    ports:
+      - "8003:8001"
+    networks:
+      - raft-net
+    depends_on:
+      node1:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  raft-net:
+    driver: bridge
