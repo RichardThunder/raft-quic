@@ -156,6 +156,8 @@ class AwsClusterManager:
 
         key_file = output.get("ssh_key_file", {}).get("value")
         if key_file:
+            if not os.path.isabs(key_file):
+                key_file = os.path.normpath(os.path.join(self.deploy_dir, key_file))
             self.ssh_key_file = key_file
         ssh_user = output.get("ssh_user", {}).get("value")
         if ssh_user:
