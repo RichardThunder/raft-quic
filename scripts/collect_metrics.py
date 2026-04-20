@@ -33,9 +33,18 @@ from typing import Dict, List, Optional, Tuple
 class MetricsCollector:
     """实时收集各种性能指标"""
 
-    def __init__(self, nodes: Dict[str, str], ssh_key: str):
+    def __init__(
+        self,
+        nodes: Dict[str, str],
+        ssh_key: str = "",
+        instances: Optional[Dict[str, str]] = None,
+        regions: Optional[Dict[str, str]] = None,
+    ):
         self.nodes = nodes
         self.ssh_key = ssh_key
+        self.instances = instances or {}
+        self.regions = regions or {}
+        self.use_ssm = bool(self.instances)
         self.metrics_history = defaultdict(list)
         self.running = False
 
@@ -45,7 +54,7 @@ class MetricsCollector:
 
         # CPU使用率
         try:
-            cpu = self._ssh_exec(ip, "top -bn1 | grep Cpu | awk '{print $2}' | cut -d'%' -f1")
+            cpu = self._remote_exec(node_id, ip, "top -bn1 | grep Cpu | awk '{print $2}' | cut -d'%' -f1")
             metrics["cpu_usage_percent"] = float(cpu) if cpu else 0
         except:
             metrics["cpu_usage_percent"] = 0
@@ -53,7 +62,7 @@ class MetricsCollector:
         # 内存使用率
         try:
             mem_cmd = "free | grep Mem | awk '{printf \"%.1f\", ($3/$2)*100}'"
-            mem = self._ssh_exec(ip, mem_cmd)
+            mem = self._remote_exec(node_id, ip, mem_cmd)
             metrics["memory_usage_percent"] = float(mem) if mem else 0
         except:
             metrics["memory_usage_percent"] = 0
@@ -61,7 +70,7 @@ class MetricsCollector:
         # 网络接口统计 (eth0)
         try:
             net_cmd = "cat /proc/net/dev | grep eth0 | awk '{print $2, $10}'"
-            net = self._ssh_exec(ip, net_cmd)
+            net = self._remote_exec(node_id, ip, net_cmd)
             if net:
                 rx, tx = net.split()
                 metrics["network_rx_bytes"] = int(rx)
@@ -73,7 +82,7 @@ class MetricsCollector:
         # 进程统计 (raftd)
         try:
             ps_cmd = "ps aux | grep raftd | grep -v grep | awk '{print $3, $6}'"
-            ps = self._ssh_exec(ip, ps_cmd)
+            ps = self._remote_exec(node_id, ip, ps_cmd)
             if ps:
                 cpu, rss = ps.split()
                 metrics["raftd_cpu_percent"] = float(cpu)
@@ -84,8 +93,8 @@ class MetricsCollector:
 
         # 磁盘I/O (iostat)
         try:
-            io_cmd = "iostat -dx 1 2 | tail -1 | awk '{print $4, $5}' | head -1"
-            io = self._ssh_exec(ip, io_cmd)
+            io_cmd = "iostat -dx 1 2 | awk '/^[svhx]d[a-z]|^nvme|^xvd/{print $4, $5; exit}'"
+            io = self._remote_exec(node_id, ip, io_cmd, timeout=15)
             if io:
                 parts = io.split()
                 if len(parts) >= 2:
@@ -98,7 +107,7 @@ class MetricsCollector:
         # 系统负载
         try:
             load_cmd = "cat /proc/loadavg | awk '{print $1, $2, $3}'"
-            load = self._ssh_exec(ip, load_cmd)
+            load = self._remote_exec(node_id, ip, load_cmd)
             if load:
                 l1, l5, l15 = load.split()
                 metrics["load_average_1m"] = float(l1)
@@ -116,11 +125,10 @@ class MetricsCollector:
         metrics = {"timestamp": datetime.now().isoformat(), "node": node_id}
 
         try:
-            cmd = f"curl -s http://{ip}:{port}/status"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            raw = self._remote_exec(node_id, ip, f"curl -s http://localhost:{port}/status", timeout=8)
 
-            if result.returncode == 0:
-                status = json.loads(result.stdout)
+            if raw:
+                status = json.loads(raw)
                 metrics["is_leader"] = status.get("is_leader", False)
                 metrics["current_term"] = status.get("term", 0)
                 metrics["committed_index"] = status.get("committed_index", 0)
@@ -160,13 +168,9 @@ class MetricsCollector:
                 try:
                     # 测量到其他节点的平均RTT和抖动
                     cmd = f"ping -c 5 -q {target_ip} | grep 'rtt min/avg/max/stddev' | awk -F'/' '{{print $4, $5}}'"
-                    result = subprocess.run(
-                        f"ssh -i {self.ssh_key} -o ConnectTimeout=3 ec2-user@{ip} '{cmd}'",
-                        shell=True, capture_output=True, text=True, timeout=15
-                    )
-
-                    if result.returncode == 0 and result.stdout:
-                        parts = result.stdout.strip().split()
+                    result = self._remote_exec(node_id, ip, cmd, timeout=30)
+                    if result:
+                        parts = result.strip().split()
                         if len(parts) >= 2:
                             metrics["rtt_avg_ms"] = float(parts[0])
                             metrics["rtt_stddev_ms"] = float(parts[1])
@@ -176,25 +180,18 @@ class MetricsCollector:
                 # 包丢失率 (ping 100次)
                 try:
                     loss_cmd = f"ping -c 100 -q {target_ip} | grep 'loss' | awk '{{print $6}}' | tr -d '%'"
-                    result = subprocess.run(
-                        f"ssh -i {self.ssh_key} -o ConnectTimeout=3 ec2-user@{ip} '{loss_cmd}'",
-                        shell=True, capture_output=True, text=True, timeout=120
-                    )
-
-                    if result.returncode == 0 and result.stdout:
-                        metrics["packet_loss_percent"] = float(result.stdout.strip())
+                    result = self._remote_exec(node_id, ip, loss_cmd, timeout=150)
+                    if result:
+                        metrics["packet_loss_percent"] = float(result.strip())
                 except:
                     metrics["packet_loss_percent"] = 0
 
         # 网络连接数
         try:
             netstat_cmd = "ss -tn state established | wc -l"
-            result = subprocess.run(
-                f"ssh -i {self.ssh_key} -o ConnectTimeout=3 ec2-user@{ip} '{netstat_cmd}'",
-                shell=True, capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0:
-                metrics["established_connections"] = int(result.stdout.strip())
+            result = self._remote_exec(node_id, ip, netstat_cmd)
+            if result:
+                metrics["established_connections"] = int(result.strip())
         except:
             metrics["established_connections"] = 0
 
@@ -202,12 +199,9 @@ class MetricsCollector:
         try:
             # 获取TCP重传总数
             tcp_stats_cmd = "cat /proc/net/snmp 2>/dev/null | grep Tcp | tail -1 | awk '{print $13}'"
-            result = subprocess.run(
-                f"ssh -i {self.ssh_key} -o ConnectTimeout=3 ec2-user@{ip} '{tcp_stats_cmd}'",
-                shell=True, capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                metrics["tcp_retransmits_total"] = int(result.stdout.strip())
+            result = self._remote_exec(node_id, ip, tcp_stats_cmd)
+            if result:
+                metrics["tcp_retransmits_total"] = int(result.strip())
         except:
             metrics["tcp_retransmits_total"] = 0
 
@@ -231,11 +225,89 @@ class MetricsCollector:
 
         return metrics
 
-    def _ssh_exec(self, ip: str, cmd: str, timeout: int = 5) -> str:
-        """执行SSH命令"""
+    def _remote_exec(self, node_id: str, ip: str, cmd: str, timeout: int = 5) -> str:
+        """执行远程命令: 优先 SSM, 其次 SSH(兼容模式)。"""
+        if self.use_ssm:
+            return self._ssm_exec(node_id, cmd, timeout=timeout)
+
+        if not self.ssh_key:
+            return ""
+
         full_cmd = f"ssh -i {self.ssh_key} -o ConnectTimeout=3 ec2-user@{ip} '{cmd}'"
         result = subprocess.run(full_cmd, shell=True, capture_output=True, text=True, timeout=timeout)
         return result.stdout.strip() if result.returncode == 0 else ""
+
+    def _ssm_exec(self, node_id: str, cmd: str, timeout: int = 30) -> str:
+        instance_id = self.instances.get(node_id)
+        if not instance_id:
+            return ""
+        region = self.regions.get(node_id, "us-east-1")
+
+        send = subprocess.run(
+            [
+                "aws",
+                "ssm",
+                "send-command",
+                "--region",
+                region,
+                "--instance-ids",
+                instance_id,
+                "--document-name",
+                "AWS-RunShellScript",
+                "--parameters",
+                json.dumps({"commands": [cmd]}),
+                "--query",
+                "Command.CommandId",
+                "--output",
+                "text",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if send.returncode != 0:
+            return ""
+
+        command_id = send.stdout.strip()
+        if not command_id:
+            return ""
+
+        deadline = time.time() + max(timeout, 5)
+        terminal = {"Success", "Failed", "Cancelled", "TimedOut", "Undeliverable", "Terminated"}
+        while time.time() < deadline:
+            inv = subprocess.run(
+                [
+                    "aws",
+                    "ssm",
+                    "get-command-invocation",
+                    "--region",
+                    region,
+                    "--command-id",
+                    command_id,
+                    "--instance-id",
+                    instance_id,
+                    "--query",
+                    "[Status,StandardOutputContent]",
+                    "--output",
+                    "json",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if inv.returncode != 0:
+                time.sleep(1)
+                continue
+            try:
+                status, output = json.loads(inv.stdout)
+            except Exception:
+                time.sleep(1)
+                continue
+
+            if status in terminal:
+                if status == "Success":
+                    return (output or "").strip()
+                return ""
+            time.sleep(1)
+        return ""
 
     def start_monitoring(self, interval: int, duration: int, protocols: List[str] = None):
         """开始监控线程"""
@@ -340,8 +412,12 @@ def main():
                        help="collection interval in seconds")
     parser.add_argument("--duration", type=int, default=300,
                        help="total monitoring duration in seconds")
-    parser.add_argument("--ssh-key", default="deploy/terraform/same-region/raft-key.pem",
-                       help="SSH key path for remote execution")
+    parser.add_argument("--ssh-key", default="",
+                       help="SSH key path for fallback mode (optional)")
+    parser.add_argument("--instances", default="",
+                       help="comma-separated instance map (node1=i-xxx,node2=i-yyy)")
+    parser.add_argument("--regions", default="",
+                       help="comma-separated region map (node1=us-east-1,node2=us-west-2)")
     parser.add_argument("--protocols", default="quic",
                        help="comma-separated protocols to monitor (quic,tcp)")
     parser.add_argument("--out", default="metrics",
@@ -355,6 +431,22 @@ def main():
         node_id, ip = node_spec.split("=")
         nodes[node_id] = ip
 
+    instances = {}
+    if args.instances:
+        for ins_spec in args.instances.split(","):
+            if "=" not in ins_spec:
+                continue
+            node_id, instance_id = ins_spec.split("=", 1)
+            instances[node_id] = instance_id
+
+    regions = {}
+    if args.regions:
+        for rg_spec in args.regions.split(","):
+            if "=" not in rg_spec:
+                continue
+            node_id, region = rg_spec.split("=", 1)
+            regions[node_id] = region
+
     protocols = args.protocols.split(",")
 
     print("=" * 70)
@@ -364,9 +456,10 @@ def main():
     print(f"采集间隔: {args.interval}s")
     print(f"监控时长: {args.duration}s")
     print(f"协议: {protocols}")
+    print(f"远程执行: {'SSM' if instances else 'SSH'}")
     print("=" * 70)
 
-    collector = MetricsCollector(nodes, args.ssh_key)
+    collector = MetricsCollector(nodes, args.ssh_key, instances=instances, regions=regions)
 
     # 启动监控
     print(f"\n[*] 启动监控线程...")

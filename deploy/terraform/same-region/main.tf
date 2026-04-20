@@ -37,6 +37,12 @@ variable "cluster_size" {
   }
 }
 
+variable "name_prefix" {
+  description = "Optional resource name prefix for parallel isolated runs"
+  type        = string
+  default     = ""
+}
+
 # ── Provider ───────────────────────────────────────────────────────────────────
 provider "aws" {
   region     = var.region
@@ -64,6 +70,7 @@ module "node" {
   instance_type  = var.instance_type
   ssh_public_key = tls_private_key.ssh.public_key_openssh
   key_pair_name  = "raft-quic-same"
+  name_prefix    = var.name_prefix
 }
 
 # ── Outputs (consumed by deploy.sh) ───────────────────────────────────────────
@@ -75,6 +82,11 @@ output "node_ips" {
 output "node_ids" {
   description = "Logical node IDs"
   value       = [for i in range(var.cluster_size) : "node${i + 1}"]
+}
+
+output "instance_ids" {
+  description = "EC2 instance IDs"
+  value       = module.node[*].instance_id
 }
 
 output "ssh_key_file" {

@@ -19,3 +19,9 @@ variable "key_pair_name" {
   type        = string
   default     = "raft-quic"
 }
+
+variable "name_prefix" {
+  description = "Optional prefix to isolate resource names for parallel test runs"
+  type        = string
+  default     = ""
+}

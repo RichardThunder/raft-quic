@@ -15,7 +15,8 @@
 #       --scenarios same-region,cross-region \
 #       --writes 500 \
 #       --duration 300 \
-#       --monitor
+#       --monitor \
+#       --parallel-cases 6
 
 set -euo pipefail
 
@@ -37,6 +38,7 @@ OUTPUT_DIR="results/distributed_test_$(date +%Y%m%d_%H%M%S)"
 SKIP_DEPLOY=false
 SKIP_TCP=false
 SKIP_QUIC=false
+PARALLEL_CASES=1
 
 # 解析命令行参数
 while [[ $# -gt 0 ]]; do
@@ -80,6 +82,10 @@ while [[ $# -gt 0 ]]; do
         --skip-quic)
             SKIP_QUIC=true
             shift
+            ;;
+        --parallel-cases)
+            PARALLEL_CASES="$2"
+            shift 2
             ;;
         *)
             echo "Unknown option: $1"
@@ -165,11 +171,113 @@ verify_aws_credentials() {
     log_success "AWS凭据验证通过"
 }
 
+sanitize_name_prefix() {
+    local raw="$1"
+    local cleaned
+    cleaned=$(echo "$raw" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')
+    cleaned="${cleaned:0:12}"
+    if [ -z "$cleaned" ]; then
+        cleaned="rq$(date +%s)"
+    fi
+    echo "$cleaned"
+}
+
+prepare_terraform_workdir() {
+    local scenario=$1
+    local test_id=$2
+    local tf_root="$OUTPUT_DIR/terraform/$test_id"
+    local target_dir="$tf_root/$scenario"
+    local source_dir="deploy/terraform/$scenario"
+
+    if [ ! -d "$source_dir" ]; then
+        log_error "Terraform 场景目录不存在: $source_dir"
+        return 1
+    fi
+
+    mkdir -p "$target_dir"
+    mkdir -p "$tf_root/modules"
+
+    cp -R deploy/terraform/modules/. "$tf_root/modules/"
+
+    while IFS= read -r src_file; do
+        cp "$src_file" "$target_dir/$(basename "$src_file")"
+    done < <(find "$source_dir" -maxdepth 1 -type f \( -name "*.tf" -o -name "*.tfvars" -o -name "*.tf.json" -o -name "*.hcl" \))
+
+    echo "$target_dir"
+}
+
+wait_for_cluster_env() {
+    local cluster_env=$1
+    local max_wait_s=${2:-300}
+    local elapsed=0
+
+    while [ "$elapsed" -lt "$max_wait_s" ]; do
+        if [ -f "$cluster_env" ]; then
+            return 0
+        fi
+        sleep 5
+        elapsed=$((elapsed + 5))
+    done
+    return 1
+}
+
+FAILED_TESTS=0
+ACTIVE_PIDS=()
+ACTIVE_LABELS=()
+
+reap_finished_parallel_jobs() {
+    local idx pid label
+    local -a remaining_pids=()
+    local -a remaining_labels=()
+
+    for idx in "${!ACTIVE_PIDS[@]}"; do
+        pid="${ACTIVE_PIDS[$idx]}"
+        label="${ACTIVE_LABELS[$idx]}"
+
+        if kill -0 "$pid" 2>/dev/null; then
+            remaining_pids+=("$pid")
+            remaining_labels+=("$label")
+            continue
+        fi
+
+        if wait "$pid"; then
+            log_success "并行任务完成: $label"
+        else
+            log_error "并行任务失败: $label"
+            FAILED_TESTS=$((FAILED_TESTS + 1))
+        fi
+    done
+
+    ACTIVE_PIDS=("${remaining_pids[@]}")
+    ACTIVE_LABELS=("${remaining_labels[@]}")
+}
+
+wait_for_parallel_slot() {
+    local max_parallel=$1
+    while [ "${#ACTIVE_PIDS[@]}" -ge "$max_parallel" ]; do
+        reap_finished_parallel_jobs
+        if [ "${#ACTIVE_PIDS[@]}" -ge "$max_parallel" ]; then
+            sleep 2
+        fi
+    done
+}
+
+wait_for_all_parallel_jobs() {
+    while [ "${#ACTIVE_PIDS[@]}" -gt 0 ]; do
+        reap_finished_parallel_jobs
+        if [ "${#ACTIVE_PIDS[@]}" -gt 0 ]; then
+            sleep 2
+        fi
+    done
+}
+
 # 函数: 运行测试套件
 run_test_suite() {
     local cluster_size=$1
     local scenario=$2
     local test_id="${scenario}_${cluster_size}nodes_$(date +%Y%m%d_%H%M%S)"
+    local name_prefix
+    name_prefix=$(sanitize_name_prefix "$test_id")
 
     log_info "开始测试: $test_id"
 
@@ -184,6 +292,11 @@ run_test_suite() {
 
     if [ "$SKIP_DEPLOY" = true ]; then
         bench_args="$bench_args --skip-deploy"
+    else
+        local terraform_dir
+        terraform_dir=$(prepare_terraform_workdir "$scenario" "$test_id")
+        bench_args="$bench_args --terraform-dir $terraform_dir"
+        bench_args="$bench_args --name-prefix $name_prefix"
     fi
 
     if [ "$SKIP_TCP" = true ]; then
@@ -208,9 +321,11 @@ run_test_suite() {
 
         # 读取集群配置获取节点IP
         local cluster_env="deploy/cluster-${scenario}-${cluster_size}.env"
-        if [ -f "$cluster_env" ]; then
+        if wait_for_cluster_env "$cluster_env" 300; then
             local nodes=""
             local monitor_ssh_key="$SSH_KEY"
+            local instances=""
+            local regions=""
             while IFS='=' read -r key value; do
                 if [[ "$key" == *"_IP" ]]; then
                     local node_name=$(echo "$key" | tr '[:upper:]' '[:lower:]' | sed 's/_ip//')
@@ -218,6 +333,20 @@ run_test_suite() {
                         nodes="$nodes,$node_name=$value"
                     else
                         nodes="$node_name=$value"
+                    fi
+                elif [[ "$key" == *"_INSTANCE_ID" ]]; then
+                    local node_name=$(echo "$key" | tr '[:upper:]' '[:lower:]' | sed 's/_instance_id//')
+                    if [ -n "$instances" ]; then
+                        instances="$instances,$node_name=$value"
+                    else
+                        instances="$node_name=$value"
+                    fi
+                elif [[ "$key" == *"_REGION" ]]; then
+                    local node_name=$(echo "$key" | tr '[:upper:]' '[:lower:]' | sed 's/_region//')
+                    if [ -n "$regions" ]; then
+                        regions="$regions,$node_name=$value"
+                    else
+                        regions="$node_name=$value"
                     fi
                 elif [[ "$key" == "KEY_FILE" && -n "$value" ]]; then
                     monitor_ssh_key="$value"
@@ -230,6 +359,8 @@ run_test_suite() {
 
                 python3 scripts/collect_metrics.py \
                     --nodes "$nodes" \
+                    --instances "$instances" \
+                    --regions "$regions" \
                     --interval 5 \
                     --duration $((DURATION + 60)) \
                     --ssh-key "$monitor_ssh_key" \
@@ -371,21 +502,58 @@ main() {
     local total_tests=$((${#size_array[@]} * ${#scenario_array[@]}))
     local test_count=0
 
+    if ! [[ "$PARALLEL_CASES" =~ ^[0-9]+$ ]] || [ "$PARALLEL_CASES" -lt 1 ]; then
+        log_error "--parallel-cases 必须是 >= 1 的整数"
+        exit 1
+    fi
+
+    if [ "$PARALLEL_CASES" -gt "$total_tests" ]; then
+        PARALLEL_CASES=$total_tests
+    fi
+
+    FAILED_TESTS=0
+    ACTIVE_PIDS=()
+    ACTIVE_LABELS=()
+
     echo "=========================================="
     log_info "总计 $total_tests 个测试任务"
+    log_info "并行度: $PARALLEL_CASES"
     echo "=========================================="
 
-    for scenario in "${scenario_array[@]}"; do
-        for cluster_size in "${size_array[@]}"; do
-            test_count=$((test_count + 1))
-            log_info "测试 $test_count/$total_tests: $scenario - $cluster_size 节点"
+    if [ "$PARALLEL_CASES" -eq 1 ]; then
+        for scenario in "${scenario_array[@]}"; do
+            for cluster_size in "${size_array[@]}"; do
+                test_count=$((test_count + 1))
+                log_info "测试 $test_count/$total_tests: $scenario - $cluster_size 节点"
 
-            run_test_suite "$cluster_size" "$scenario"
+                run_test_suite "$cluster_size" "$scenario"
 
-            log_info "等待5秒后开始下一个测试..."
-            sleep 5
+                log_info "等待5秒后开始下一个测试..."
+                sleep 5
+            done
         done
-    done
+    else
+        for scenario in "${scenario_array[@]}"; do
+            for cluster_size in "${size_array[@]}"; do
+                test_count=$((test_count + 1))
+                log_info "提交测试 $test_count/$total_tests: $scenario - $cluster_size 节点"
+
+                wait_for_parallel_slot "$PARALLEL_CASES"
+
+                run_test_suite "$cluster_size" "$scenario" &
+                local suite_pid=$!
+                ACTIVE_PIDS+=("$suite_pid")
+                ACTIVE_LABELS+=("${scenario}-${cluster_size}nodes")
+            done
+        done
+
+        wait_for_all_parallel_jobs
+
+        if [ "$FAILED_TESTS" -gt 0 ]; then
+            log_error "并行测试失败: $FAILED_TESTS 个任务失败"
+            exit 1
+        fi
+    fi
 
     # 生成报告
     log_info "生成最终报告..."

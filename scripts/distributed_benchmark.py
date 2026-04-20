@@ -24,6 +24,8 @@ import json
 import os
 import random
 import re
+import socket
+import shlex
 import string
 import subprocess
 import sys
@@ -45,11 +47,21 @@ def _node_sort_key(node_id: str) -> Tuple[int, str]:
 class AwsClusterManager:
     """管理 AWS 集群部署、服务启动和销毁。"""
 
-    def __init__(self, cluster_size: int, scenario: str):
+    def __init__(
+        self,
+        cluster_size: int,
+        scenario: str,
+        terraform_dir: Optional[str] = None,
+        name_prefix: str = "",
+    ):
         self.cluster_size = cluster_size
         self.scenario = scenario
         self.repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        self.deploy_dir = os.path.join(self.repo_root, "deploy", "terraform", scenario)
+        self.deploy_dir = (
+            os.path.abspath(terraform_dir)
+            if terraform_dir
+            else os.path.join(self.repo_root, "deploy", "terraform", scenario)
+        )
         self.cluster_env = os.path.join(
             self.repo_root, "deploy", f"cluster-{scenario}-{cluster_size}.env"
         )
@@ -61,6 +73,12 @@ class AwsClusterManager:
         self.ssh_user = "ec2-user"
         self.nodes: Dict[str, str] = {}
         self.region_labels: List[str] = []
+        self.instances: Dict[str, str] = {}
+        self.node_regions: Dict[str, str] = {}
+        self.name_prefix = name_prefix.strip()
+        self.artifact_region = "us-east-1"
+        self.artifact_bucket = ""
+        self.artifact_keys: List[str] = []
 
     def deploy(self) -> Dict[str, str]:
         """部署集群并启动 raftd + tcp-server。"""
@@ -83,10 +101,13 @@ class AwsClusterManager:
             return {}
 
         self._save_cluster_config(self.nodes)
-        self._wait_for_ssh_ready(self.nodes)
-        self._upload_binaries(self.nodes)
-        self._start_cluster_services(self.nodes)
-        self._wait_for_cluster_ready(self.nodes)
+        artifact_urls = self._prepare_artifacts()
+        try:
+            self._wait_for_ssm_ready()
+            self._start_cluster_services_via_ssm(self.nodes, artifact_urls)
+            self._wait_for_cluster_ready(self.nodes)
+        finally:
+            self._cleanup_artifacts()
 
         print(f"[+] 集群部署并启动完成: {list(self.nodes.keys())}", flush=True)
         return self.nodes
@@ -124,16 +145,16 @@ class AwsClusterManager:
         )
 
     def _terraform_apply(self):
-        self._run_cmd(
-            [
-                "terraform",
-                "apply",
-                "-input=false",
-                "-auto-approve",
-                f"-var=cluster_size={self.cluster_size}",
-            ],
-            cwd=self.deploy_dir,
-        )
+        cmd = [
+            "terraform",
+            "apply",
+            "-input=false",
+            "-auto-approve",
+            f"-var=cluster_size={self.cluster_size}",
+        ]
+        if self.name_prefix:
+            cmd.append(f"-var=name_prefix={self.name_prefix}")
+        self._run_cmd(cmd, cwd=self.deploy_dir)
 
     def _parse_terraform_output(self) -> Dict[str, str]:
         result = self._run_cmd(
@@ -148,11 +169,14 @@ class AwsClusterManager:
 
         node_ips = output.get("node_ips", {}).get("value", [])
         node_ids = output.get("node_ids", {}).get("value", [])
+        instance_ids = output.get("instance_ids", {}).get("value", [])
         if not node_ids:
             node_ids = [f"node{i}" for i in range(1, len(node_ips) + 1)]
 
         if len(node_ids) != len(node_ips):
             raise RuntimeError("Terraform 输出 node_ids 与 node_ips 数量不一致")
+        if len(instance_ids) != len(node_ids):
+            raise RuntimeError("Terraform 输出 instance_ids 缺失或数量不一致，无法使用 SSM 部署")
 
         key_file = output.get("ssh_key_file", {}).get("value")
         if key_file:
@@ -164,11 +188,26 @@ class AwsClusterManager:
             self.ssh_user = ssh_user
 
         self.region_labels = output.get("region_labels", {}).get("value", [])
+        if self.region_labels and len(self.region_labels) != len(node_ids):
+            raise RuntimeError("Terraform 输出 region_labels 数量与节点数不一致")
 
-        nodes = {}
-        for node_id, ip in zip(node_ids, node_ips):
-            nodes[node_id] = ip
-        return dict(sorted(nodes.items(), key=lambda kv: _node_sort_key(kv[0])))
+        raw_nodes: Dict[str, str] = {}
+        raw_instances: Dict[str, str] = {}
+        raw_regions: Dict[str, str] = {}
+        for idx, node_id in enumerate(node_ids):
+            raw_nodes[node_id] = node_ips[idx]
+            raw_instances[node_id] = instance_ids[idx]
+            if self.region_labels:
+                raw_regions[node_id] = self.region_labels[idx]
+            else:
+                raw_regions[node_id] = "us-east-1"
+
+        sorted_node_ids = sorted(raw_nodes.keys(), key=_node_sort_key)
+        self.instances = {node_id: raw_instances[node_id] for node_id in sorted_node_ids}
+        self.node_regions = {node_id: raw_regions[node_id] for node_id in sorted_node_ids}
+        self.region_labels = [self.node_regions[node_id] for node_id in sorted_node_ids]
+
+        return {node_id: raw_nodes[node_id] for node_id in sorted_node_ids}
 
     def _save_cluster_config(self, nodes: Dict[str, str]):
         os.makedirs(os.path.dirname(self.cluster_env), exist_ok=True)
@@ -182,55 +221,194 @@ class AwsClusterManager:
                 f.write(f"REGION_LABELS={','.join(self.region_labels)}\n")
             for node_id, ip in nodes.items():
                 f.write(f"{node_id.upper()}_IP={ip}\n")
+                if node_id in self.instances:
+                    f.write(f"{node_id.upper()}_INSTANCE_ID={self.instances[node_id]}\n")
+                if node_id in self.node_regions:
+                    f.write(f"{node_id.upper()}_REGION={self.node_regions[node_id]}\n")
         print(f"[+] 集群配置已保存: {self.cluster_env}", flush=True)
 
-    def _wait_for_ssh_ready(self, nodes: Dict[str, str], retries: int = 36, wait_s: int = 5):
-        for node_id, ip in nodes.items():
-            print(f"[*] 等待 SSH 就绪: {node_id} ({ip})", flush=True)
+    def _prepare_artifacts(self) -> Dict[str, str]:
+        print("[*] 上传二进制到 S3（供 SSM 拉取）...", flush=True)
+
+        account = self._run_cmd(
+            ["aws", "sts", "get-caller-identity", "--query", "Account", "--output", "text"],
+            capture_output=True,
+        ).stdout.strip()
+        if not account:
+            raise RuntimeError("无法读取 AWS 账号 ID")
+
+        self.artifact_bucket = f"raft-quic-artifacts-{account}-{self.artifact_region}"
+        self._ensure_artifact_bucket(self.artifact_bucket)
+
+        suffix = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{os.getpid()}-{self.scenario}-{self.cluster_size}"
+        raft_key = f"distributed-benchmark/{suffix}/raftd-linux-amd64"
+        tcp_key = f"distributed-benchmark/{suffix}/tcp-server-linux-amd64"
+
+        self._run_cmd(
+            [
+                "aws",
+                "s3",
+                "cp",
+                self.raft_binary,
+                f"s3://{self.artifact_bucket}/{raft_key}",
+                "--region",
+                self.artifact_region,
+            ]
+        )
+        self._run_cmd(
+            [
+                "aws",
+                "s3",
+                "cp",
+                self.tcp_binary,
+                f"s3://{self.artifact_bucket}/{tcp_key}",
+                "--region",
+                self.artifact_region,
+            ]
+        )
+
+        raft_url = self._run_cmd(
+            [
+                "aws",
+                "s3",
+                "presign",
+                f"s3://{self.artifact_bucket}/{raft_key}",
+                "--expires-in",
+                "7200",
+                "--region",
+                self.artifact_region,
+            ],
+            capture_output=True,
+        ).stdout.strip()
+        tcp_url = self._run_cmd(
+            [
+                "aws",
+                "s3",
+                "presign",
+                f"s3://{self.artifact_bucket}/{tcp_key}",
+                "--expires-in",
+                "7200",
+                "--region",
+                self.artifact_region,
+            ],
+            capture_output=True,
+        ).stdout.strip()
+
+        self.artifact_keys = [raft_key, tcp_key]
+        print("[+] 二进制已上传并生成预签名下载链接", flush=True)
+        return {"raftd": raft_url, "tcp_server": tcp_url}
+
+    def _ensure_artifact_bucket(self, bucket: str):
+        head = self._run_cmd(
+            ["aws", "s3api", "head-bucket", "--bucket", bucket, "--region", self.artifact_region],
+            capture_output=True,
+            check=False,
+        )
+        if head.returncode == 0:
+            return
+
+        create_cmd = [
+            "aws",
+            "s3api",
+            "create-bucket",
+            "--bucket",
+            bucket,
+            "--region",
+            self.artifact_region,
+        ]
+        if self.artifact_region != "us-east-1":
+            create_cmd.extend(
+                ["--create-bucket-configuration", f"LocationConstraint={self.artifact_region}"]
+            )
+        self._run_cmd(create_cmd)
+
+    def _cleanup_artifacts(self):
+        if not self.artifact_bucket or not self.artifact_keys:
+            return
+        for key in self.artifact_keys:
+            self._run_cmd(
+                [
+                    "aws",
+                    "s3",
+                    "rm",
+                    f"s3://{self.artifact_bucket}/{key}",
+                    "--region",
+                    self.artifact_region,
+                ],
+                check=False,
+            )
+        self.artifact_keys = []
+
+    def _wait_for_ssm_ready(self, retries: int = 60, wait_s: int = 5):
+        for node_id in sorted(self.instances.keys(), key=_node_sort_key):
+            instance_id = self.instances[node_id]
+            region = self.node_regions.get(node_id, "us-east-1")
+            print(f"[*] 等待 SSM 就绪: {node_id} ({instance_id}, {region})", flush=True)
+
             ready = False
+            last_status = ""
             for _ in range(retries):
-                result = self._ssh_cmd(ip, "true", check=False)
+                result = self._run_cmd(
+                    [
+                        "aws",
+                        "ssm",
+                        "describe-instance-information",
+                        "--region",
+                        region,
+                        "--filters",
+                        f"Key=InstanceIds,Values={instance_id}",
+                        "--query",
+                        "InstanceInformationList[0].PingStatus",
+                        "--output",
+                        "text",
+                    ],
+                    capture_output=True,
+                    check=False,
+                )
                 if result.returncode == 0:
-                    ready = True
-                    break
+                    status = result.stdout.strip()
+                    if status == "Online":
+                        ready = True
+                        break
+                    last_status = status
+                else:
+                    if result.stderr:
+                        last_status = result.stderr.strip().splitlines()[-1]
                 time.sleep(wait_s)
+
             if not ready:
-                raise RuntimeError(f"SSH 超时: {node_id} ({ip})")
-            print(f"[+] SSH 就绪: {node_id}", flush=True)
+                detail = f", 最后状态: {last_status}" if last_status else ""
+                raise RuntimeError(f"SSM 超时: {node_id} ({instance_id}){detail}")
+            print(f"[+] SSM 就绪: {node_id}", flush=True)
 
-    def _upload_binaries(self, nodes: Dict[str, str]):
-        print("[*] 上传二进制到所有节点...", flush=True)
-        for node_id, ip in nodes.items():
-            self._scp_cmd(self.raft_binary, ip, "~/raftd")
-            self._scp_cmd(self.tcp_binary, ip, "~/tcp-server")
-            print(f"[+] 上传完成: {node_id}", flush=True)
-
-    def _start_cluster_services(self, nodes: Dict[str, str]):
+    def _start_cluster_services_via_ssm(self, nodes: Dict[str, str], artifacts: Dict[str, str]):
         if not nodes:
             raise RuntimeError("空节点列表，无法启动服务")
 
         hb_timeout, el_timeout = self._raft_timeouts()
-        ordered_nodes = list(nodes.items())
+        ordered_nodes = sorted(nodes.items(), key=lambda kv: _node_sort_key(kv[0]))
         bootstrap_id, bootstrap_ip = ordered_nodes[0]
 
-        print(f"[*] 启动 bootstrap 节点: {bootstrap_id}", flush=True)
-        self._start_node(
+        print(f"[*] 通过 SSM 启动 bootstrap 节点: {bootstrap_id}", flush=True)
+        self._start_node_via_ssm(
             node_id=bootstrap_id,
             ip=bootstrap_ip,
             join_addr=None,
             heartbeat_timeout=hb_timeout,
             election_timeout=el_timeout,
+            artifacts=artifacts,
         )
         time.sleep(5)
 
         for node_id, ip in ordered_nodes[1:]:
-            print(f"[*] 启动 follower 节点: {node_id}", flush=True)
-            self._start_node(
+            print(f"[*] 通过 SSM 启动 follower 节点: {node_id}", flush=True)
+            self._start_node_via_ssm(
                 node_id=node_id,
                 ip=ip,
                 join_addr=f"{bootstrap_ip}:8001",
                 heartbeat_timeout=hb_timeout,
                 election_timeout=el_timeout,
+                artifacts=artifacts,
             )
 
     def _wait_for_cluster_ready(self, nodes: Dict[str, str], timeout_s: int = 90):
@@ -252,35 +430,131 @@ class AwsClusterManager:
             time.sleep(2)
         raise RuntimeError("集群未在超时内就绪")
 
-    def _start_node(
+    def _start_node_via_ssm(
         self,
         node_id: str,
         ip: str,
         join_addr: Optional[str],
         heartbeat_timeout: str,
         election_timeout: str,
+        artifacts: Dict[str, str],
     ):
-        join_arg = ""
+        raft_cmd = (
+            f"/opt/raft-quic/raftd -id {shlex.quote(node_id)} "
+            f"-bind 0.0.0.0:7001 -advertise {shlex.quote(f'{ip}:7001')} "
+            f"-http 0.0.0.0:8001 "
+            f"-heartbeat-timeout {shlex.quote(heartbeat_timeout)} "
+            f"-election-timeout {shlex.quote(election_timeout)}"
+        )
         if join_addr:
-            join_arg = f" -join {join_addr} -join-retries 20"
-        script = f"""set -e
-pkill -f raftd >/dev/null 2>&1 || true
-pkill -f tcp-server >/dev/null 2>&1 || true
-sleep 1
-chmod +x ~/raftd ~/tcp-server
-nohup ~/tcp-server -bind 0.0.0.0:9001 > ~/tcp-server.log 2>&1 &
-echo $! > ~/tcp-server.pid
-nohup ~/raftd \\
-  -id {node_id} \\
-  -bind 0.0.0.0:7001 \\
-  -advertise {ip}:7001 \\
-  -http 0.0.0.0:8001 \\
-  -heartbeat-timeout {heartbeat_timeout} \\
-  -election-timeout {election_timeout}{join_arg} \\
-  > ~/raftd.log 2>&1 &
-echo $! > ~/raftd.pid
-"""
-        self._ssh_cmd(ip, "bash -s", stdin=script)
+            raft_cmd += f" -join {shlex.quote(join_addr)} -join-retries 20"
+
+        commands = [
+            "set -euo pipefail",
+            "sudo mkdir -p /opt/raft-quic",
+            f"sudo curl -fsSL {shlex.quote(artifacts['raftd'])} -o /opt/raft-quic/raftd",
+            f"sudo curl -fsSL {shlex.quote(artifacts['tcp_server'])} -o /opt/raft-quic/tcp-server",
+            "sudo chmod +x /opt/raft-quic/raftd /opt/raft-quic/tcp-server",
+            "sudo pkill -f '/opt/raft-quic/raftd' >/dev/null 2>&1 || true",
+            "sudo pkill -f '/opt/raft-quic/tcp-server' >/dev/null 2>&1 || true",
+            "sudo nohup /opt/raft-quic/tcp-server -bind 0.0.0.0:9001 > /var/log/tcp-server.log 2>&1 &",
+            f"sudo nohup {raft_cmd} > /var/log/raftd.log 2>&1 &",
+        ]
+        self._run_ssm_commands(node_id, commands)
+
+    def _run_ssm_commands(self, node_id: str, commands: List[str], timeout_s: int = 600):
+        instance_id = self.instances.get(node_id)
+        if not instance_id:
+            raise RuntimeError(f"节点 {node_id} 缺少 instance_id")
+        region = self.node_regions.get(node_id, "us-east-1")
+
+        send = self._run_cmd(
+            [
+                "aws",
+                "ssm",
+                "send-command",
+                "--region",
+                region,
+                "--instance-ids",
+                instance_id,
+                "--document-name",
+                "AWS-RunShellScript",
+                "--comment",
+                f"raft-quic-start-{node_id}",
+                "--parameters",
+                json.dumps({"commands": commands}, ensure_ascii=False),
+                "--query",
+                "Command.CommandId",
+                "--output",
+                "text",
+            ],
+            capture_output=True,
+        )
+        command_id = send.stdout.strip()
+        if not command_id:
+            raise RuntimeError(f"无法获取 SSM command_id: {node_id}")
+
+        terminal = {"Success", "Failed", "Cancelled", "TimedOut", "Undeliverable", "Terminated"}
+        deadline = time.monotonic() + timeout_s
+        last_status = ""
+
+        while time.monotonic() < deadline:
+            status_res = self._run_cmd(
+                [
+                    "aws",
+                    "ssm",
+                    "get-command-invocation",
+                    "--region",
+                    region,
+                    "--command-id",
+                    command_id,
+                    "--instance-id",
+                    instance_id,
+                    "--query",
+                    "Status",
+                    "--output",
+                    "text",
+                ],
+                capture_output=True,
+                check=False,
+            )
+            if status_res.returncode != 0:
+                time.sleep(3)
+                continue
+
+            status = status_res.stdout.strip()
+            if status:
+                last_status = status
+            if status in terminal:
+                if status != "Success":
+                    stderr_res = self._run_cmd(
+                        [
+                            "aws",
+                            "ssm",
+                            "get-command-invocation",
+                            "--region",
+                            region,
+                            "--command-id",
+                            command_id,
+                            "--instance-id",
+                            instance_id,
+                            "--query",
+                            "StandardErrorContent",
+                            "--output",
+                            "text",
+                        ],
+                        capture_output=True,
+                        check=False,
+                    )
+                    err = stderr_res.stdout.strip() if stderr_res.returncode == 0 else ""
+                    detail = f", stderr: {err}" if err else ""
+                    raise RuntimeError(f"SSM 命令失败: {node_id} ({status}){detail}")
+                return
+
+            time.sleep(3)
+
+        detail = f", 最后状态: {last_status}" if last_status else ""
+        raise RuntimeError(f"SSM 命令超时: {node_id}{detail}")
 
     def _raft_timeouts(self) -> Tuple[str, str]:
         if self.scenario == "cross-region":
@@ -300,17 +574,16 @@ echo $! > ~/raftd.pid
     def teardown(self):
         """销毁集群。"""
         print(f"[*] 销毁 {self.cluster_size} 节点 {self.scenario} 集群...", flush=True)
-        self._run_cmd(
-            [
-                "terraform",
-                "destroy",
-                "-input=false",
-                "-auto-approve",
-                f"-var=cluster_size={self.cluster_size}",
-            ],
-            cwd=self.deploy_dir,
-            check=False,
-        )
+        cmd = [
+            "terraform",
+            "destroy",
+            "-input=false",
+            "-auto-approve",
+            f"-var=cluster_size={self.cluster_size}",
+        ]
+        if self.name_prefix:
+            cmd.append(f"-var=name_prefix={self.name_prefix}")
+        self._run_cmd(cmd, cwd=self.deploy_dir, check=False)
         print("[+] 集群已销毁", flush=True)
 
     def _run_cmd(
@@ -330,54 +603,25 @@ echo $! > ~/raftd.pid
             capture_output=capture_output,
         )
 
-    def _ssh_cmd(
-        self,
-        ip: str,
-        remote_cmd: str,
-        stdin: Optional[str] = None,
-        check: bool = True,
-    ) -> subprocess.CompletedProcess:
-        cmd = [
-            "ssh",
-            "-i",
-            self.ssh_key_file,
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ConnectTimeout=8",
-            f"{self.ssh_user}@{ip}",
-            remote_cmd,
-        ]
-        return subprocess.run(
-            cmd,
-            input=stdin,
-            text=True,
-            check=check,
-            capture_output=True,
-        )
-
-    def _scp_cmd(self, local_file: str, ip: str, remote_file: str):
-        cmd = [
-            "scp",
-            "-i",
-            self.ssh_key_file,
-            "-o",
-            "StrictHostKeyChecking=no",
-            local_file,
-            f"{self.ssh_user}@{ip}:{remote_file}",
-        ]
-        subprocess.run(cmd, text=True, check=True, capture_output=True)
-
 
 class MetricsCollector:
     """收集系统与 Raft 指标。"""
 
-    def __init__(self, nodes: Dict[str, str], ssh_key: str, ssh_user: str = "ec2-user"):
+    def __init__(
+        self,
+        nodes: Dict[str, str],
+        ssh_key: str,
+        ssh_user: str = "ec2-user",
+        instances: Optional[Dict[str, str]] = None,
+        node_regions: Optional[Dict[str, str]] = None,
+    ):
         self.nodes = nodes
         self.ssh_key = ssh_key
         self.ssh_user = ssh_user
+        self.instances = instances or {}
+        self.node_regions = node_regions or {}
+        self.ip_to_node = {ip: node_id for node_id, ip in nodes.items()}
+        self.use_ssm = bool(self.instances)
 
     def collect_baseline(self) -> Dict:
         baseline = {}
@@ -409,6 +653,10 @@ class MetricsCollector:
         return raft_metrics
 
     def _ssh_exec(self, ip: str, remote_cmd: str, timeout: int = 5) -> str:
+        node_id = self.ip_to_node.get(ip, "")
+        if self.use_ssm and node_id in self.instances:
+            return self._ssm_exec(node_id, remote_cmd, timeout=timeout)
+
         cmd = [
             "ssh",
             "-i",
@@ -422,6 +670,76 @@ class MetricsCollector:
         ]
         result = subprocess.run(cmd, text=True, capture_output=True, timeout=timeout)
         return result.stdout.strip() if result.returncode == 0 else ""
+
+    def _ssm_exec(self, node_id: str, remote_cmd: str, timeout: int = 15) -> str:
+        instance_id = self.instances.get(node_id)
+        if not instance_id:
+            return ""
+        region = self.node_regions.get(node_id, "us-east-1")
+
+        send = subprocess.run(
+            [
+                "aws",
+                "ssm",
+                "send-command",
+                "--region",
+                region,
+                "--instance-ids",
+                instance_id,
+                "--document-name",
+                "AWS-RunShellScript",
+                "--parameters",
+                json.dumps({"commands": [remote_cmd]}),
+                "--query",
+                "Command.CommandId",
+                "--output",
+                "text",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        if send.returncode != 0:
+            return ""
+        command_id = send.stdout.strip()
+        if not command_id:
+            return ""
+
+        deadline = time.time() + max(timeout, 5)
+        terminal = {"Success", "Failed", "Cancelled", "TimedOut", "Undeliverable", "Terminated"}
+        while time.time() < deadline:
+            inv = subprocess.run(
+                [
+                    "aws",
+                    "ssm",
+                    "get-command-invocation",
+                    "--region",
+                    region,
+                    "--command-id",
+                    command_id,
+                    "--instance-id",
+                    instance_id,
+                    "--query",
+                    "[Status,StandardOutputContent]",
+                    "--output",
+                    "json",
+                ],
+                text=True,
+                capture_output=True,
+            )
+            if inv.returncode != 0:
+                time.sleep(1)
+                continue
+            try:
+                status, stdout = json.loads(inv.stdout)
+            except Exception:
+                time.sleep(1)
+                continue
+            if status in terminal:
+                if status == "Success":
+                    return (stdout or "").strip()
+                return ""
+            time.sleep(1)
+        return ""
 
     def _get_cpu(self, ip: str) -> float:
         output = self._ssh_exec(ip, "top -bn1 | grep Cpu | awk '{print $2}'")
@@ -495,6 +813,12 @@ class DistributedBenchmark:
             "write_p99_ms": latency_data.get("p99", 0),
             "read_throughput": read_data.get("throughput", 0),
             "write_errors": benchmark_data.get("errors", 0),
+            "write_error_503": benchmark_data.get("error_503", 0),
+            "write_error_500": benchmark_data.get("error_500", 0),
+            "write_error_timeout": benchmark_data.get("error_timeout", 0),
+            "write_error_other": benchmark_data.get("error_other", 0),
+            "write_retries": benchmark_data.get("retries", 0),
+            "write_retry_recovered": benchmark_data.get("retry_recovered", 0),
             "read_errors": read_data.get("errors", 0),
             "timestamp": datetime.now().isoformat(),
         }
@@ -524,29 +848,68 @@ class DistributedBenchmark:
         port = 8001 if protocol == "quic" else 9001
         latencies: List[float] = []
         errors = 0
+        error_503 = 0
+        error_500 = 0
+        error_timeout = 0
+        error_other = 0
+        retries = 0
+        retry_recovered = 0
         start = time.monotonic()
+        max_attempts = 3 if protocol == "quic" else 2
 
         for i in range(writes):
             key = f"bench_{protocol}_{i}"
             value = "".join(random.choices(string.ascii_letters + string.digits, k=32))
-            status, elapsed_ms, _ = self._http_request(
-                "POST",
-                ip,
-                port,
-                "/set",
-                {"key": key, "value": value},
-                timeout=10,
-            )
-            if status == 200:
-                latencies.append(elapsed_ms)
-            else:
-                errors += 1
+            request_ip = self.leader_ip if protocol == "quic" and self.leader_ip else ip
+            recovered = False
+
+            for attempt in range(max_attempts):
+                status, elapsed_ms, _, error_kind = self._http_request_detailed(
+                    "POST",
+                    request_ip,
+                    port,
+                    "/set",
+                    {"key": key, "value": value},
+                    timeout=10,
+                )
+
+                if status == 200:
+                    latencies.append(elapsed_ms)
+                    if recovered:
+                        retry_recovered += 1
+                    break
+
+                if attempt == max_attempts - 1:
+                    errors += 1
+                    if status == 503:
+                        error_503 += 1
+                    elif status == 500:
+                        error_500 += 1
+                    elif error_kind == "timeout":
+                        error_timeout += 1
+                    else:
+                        error_other += 1
+                    break
+
+                retries += 1
+                recovered = True
+                if protocol == "quic":
+                    self._find_leader(retries=5, wait_s=0.2)
+                    if self.leader_ip:
+                        request_ip = self.leader_ip
+                time.sleep(0.1 * (attempt + 1))
 
         elapsed = time.monotonic() - start
         return {
             "throughput": len(latencies) / elapsed if elapsed > 0 else 0,
             "latencies": latencies,
             "errors": errors,
+            "error_503": error_503,
+            "error_500": error_500,
+            "error_timeout": error_timeout,
+            "error_other": error_other,
+            "retries": retries,
+            "retry_recovered": retry_recovered,
         }
 
     def _run_latency_benchmark(self, duration: int, protocol: str, ip: str) -> Dict:
@@ -627,6 +990,25 @@ class DistributedBenchmark:
         params: Optional[Dict[str, str]] = None,
         timeout: int = 10,
     ) -> Tuple[Optional[int], float, str]:
+        status, elapsed_ms, body, _ = DistributedBenchmark._http_request_detailed(
+            method=method,
+            ip=ip,
+            port=port,
+            path=path,
+            params=params,
+            timeout=timeout,
+        )
+        return (status, elapsed_ms, body)
+
+    @staticmethod
+    def _http_request_detailed(
+        method: str,
+        ip: str,
+        port: int,
+        path: str,
+        params: Optional[Dict[str, str]] = None,
+        timeout: int = 10,
+    ) -> Tuple[Optional[int], float, str, str]:
         query = urllib.parse.urlencode(params or {})
         url = f"http://{ip}:{port}{path}"
         if query:
@@ -641,10 +1023,23 @@ class DistributedBenchmark:
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="ignore")
             status = exc.code
-        except Exception:
-            return (None, 0.0, "")
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            return (status, elapsed_ms, body, "")
+        except Exception as exc:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            error_kind = "timeout" if DistributedBenchmark._is_timeout_error(exc) else "request"
+            return (None, elapsed_ms, "", error_kind)
         elapsed_ms = (time.perf_counter() - start) * 1000
-        return (status, elapsed_ms, body)
+        return (status, elapsed_ms, body, "")
+
+    @staticmethod
+    def _is_timeout_error(exc: Exception) -> bool:
+        if isinstance(exc, (TimeoutError, socket.timeout)):
+            return True
+        if isinstance(exc, urllib.error.URLError):
+            reason = exc.reason
+            return isinstance(reason, (TimeoutError, socket.timeout))
+        return False
 
 
 def main():
@@ -685,6 +1080,16 @@ def main():
         default="deploy/terraform/same-region/raft-key.pem",
         help="SSH key path for metric collection (used with --skip-deploy)",
     )
+    parser.add_argument(
+        "--terraform-dir",
+        default="",
+        help="override terraform scenario directory (for isolated parallel runs)",
+    )
+    parser.add_argument(
+        "--name-prefix",
+        default="",
+        help="resource name prefix to avoid collisions across parallel runs",
+    )
     parser.add_argument("--out", default="results", help="output directory")
     parser.add_argument(
         "--skip-deploy",
@@ -702,6 +1107,8 @@ def main():
         raise SystemExit("cluster size must be >= 3")
     if args.skip_tcp and args.skip_quic:
         raise SystemExit("cannot skip both tcp and quic benchmarks")
+    if args.terraform_dir and len(scenarios) != 1:
+        raise SystemExit("--terraform-dir requires exactly one scenario")
 
     os.makedirs(args.out, exist_ok=True)
 
@@ -718,7 +1125,12 @@ def main():
 
     for scenario in scenarios:
         for cluster_size in cluster_sizes:
-            manager = AwsClusterManager(cluster_size, scenario)
+            manager = AwsClusterManager(
+                cluster_size,
+                scenario,
+                terraform_dir=args.terraform_dir or None,
+                name_prefix=args.name_prefix,
+            )
             collector = None
             try:
                 if not args.skip_deploy:
@@ -726,6 +1138,8 @@ def main():
                 else:
                     env_kv = _load_env_file(manager.cluster_env)
                     nodes = _load_nodes_from_env(env_kv)
+                    manager.instances = _load_instances_from_env(env_kv)
+                    manager.node_regions = _load_regions_from_env(env_kv)
                     manager.ssh_key_file = env_kv.get("KEY_FILE", args.ssh_key)
                     manager.ssh_user = env_kv.get("SSH_USER", "ec2-user")
 
@@ -734,7 +1148,13 @@ def main():
                     continue
 
                 if args.monitor:
-                    collector = MetricsCollector(nodes, manager.ssh_key_file, manager.ssh_user)
+                    collector = MetricsCollector(
+                        nodes,
+                        manager.ssh_key_file,
+                        manager.ssh_user,
+                        manager.instances,
+                        manager.node_regions,
+                    )
                     collector.collect_baseline()
                     print("[+] 基线指标已收集", flush=True)
 
@@ -789,6 +1209,24 @@ def _load_nodes_from_env(env: Dict[str, str]) -> Dict[str, str]:
     return dict(sorted(nodes.items(), key=lambda kv: _node_sort_key(kv[0])))
 
 
+def _load_instances_from_env(env: Dict[str, str]) -> Dict[str, str]:
+    instances = {}
+    for key, value in env.items():
+        if key.endswith("_INSTANCE_ID"):
+            node_id = key[: -len("_INSTANCE_ID")].lower()
+            instances[node_id] = value
+    return dict(sorted(instances.items(), key=lambda kv: _node_sort_key(kv[0])))
+
+
+def _load_regions_from_env(env: Dict[str, str]) -> Dict[str, str]:
+    regions = {}
+    for key, value in env.items():
+        if key.endswith("_REGION"):
+            node_id = key[: -len("_REGION")].lower()
+            regions[node_id] = value
+    return dict(sorted(regions.items(), key=lambda kv: _node_sort_key(kv[0])))
+
+
 def _save_results(results: List[Dict], output_dir: str):
     if not results:
         print("[!] 无可保存结果", flush=True)
@@ -807,6 +1245,12 @@ def _save_results(results: List[Dict], output_dir: str):
         "write_p99_ms",
         "read_throughput",
         "write_errors",
+        "write_error_503",
+        "write_error_500",
+        "write_error_timeout",
+        "write_error_other",
+        "write_retries",
+        "write_retry_recovered",
         "read_errors",
         "timestamp",
     ]
@@ -836,14 +1280,19 @@ def _generate_report(results: List[Dict], output_dir: str):
 
     for (protocol, scenario), rows in sorted(grouped.items()):
         summary.append(f"## {protocol.upper()} - {scenario}\n\n")
-        summary.append("| 集群规模 | 写吞吐(ops/s) | 写p99(ms) | 读吞吐(ops/s) | 写错误 |\n")
-        summary.append("|---------|-------------|---------|---------------|-------|\n")
+        summary.append(
+            "| 集群规模 | 写吞吐(ops/s) | 写p99(ms) | 读吞吐(ops/s) | 写错误 | 503 | 500 | 超时 |\n"
+        )
+        summary.append("|---------|-------------|---------|---------------|-------|-----|-----|------|\n")
 
         for row in sorted(rows, key=lambda x: x["cluster_size"]):
             summary.append(
                 f"| {row['cluster_size']} | {row['write_throughput']:.1f} | "
                 f"{row['write_p99_ms']:.2f} | {row['read_throughput']:.1f} | "
-                f"{row.get('write_errors', 0)} |\n"
+                f"{row.get('write_errors', 0)} | "
+                f"{row.get('write_error_503', 0)} | "
+                f"{row.get('write_error_500', 0)} | "
+                f"{row.get('write_error_timeout', 0)} |\n"
             )
         summary.append("\n")
 

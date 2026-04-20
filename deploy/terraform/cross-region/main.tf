@@ -45,6 +45,12 @@ variable "cluster_size" {
   }
 }
 
+variable "name_prefix" {
+  description = "Optional resource name prefix for parallel isolated runs"
+  type        = string
+  default     = ""
+}
+
 locals {
   extra_nodes = var.cluster_size - 3
 
@@ -93,6 +99,7 @@ module "node_ap" {
   instance_type  = var.instance_type
   ssh_public_key = tls_private_key.ssh.public_key_openssh
   key_pair_name  = "raft-quic-cross"
+  name_prefix    = var.name_prefix
 }
 
 # ── US region nodes ────────────────────────────────────────────────────────────
@@ -105,6 +112,7 @@ module "node_us" {
   instance_type  = var.instance_type
   ssh_public_key = tls_private_key.ssh.public_key_openssh
   key_pair_name  = "raft-quic-cross"
+  name_prefix    = var.name_prefix
 }
 
 # ── EU region nodes ────────────────────────────────────────────────────────────
@@ -117,6 +125,7 @@ module "node_eu" {
   instance_type  = var.instance_type
   ssh_public_key = tls_private_key.ssh.public_key_openssh
   key_pair_name  = "raft-quic-cross"
+  name_prefix    = var.name_prefix
 }
 
 # ── Outputs ────────────────────────────────────────────────────────────────────
@@ -133,6 +142,14 @@ output "node_ids" {
     [for i in range(local.ap_count) : "node${i + 1}"],
     [for i in range(local.us_count) : "node${local.ap_count + i + 1}"],
     [for i in range(local.eu_count) : "node${local.ap_count + local.us_count + i + 1}"],
+  )
+}
+
+output "instance_ids" {
+  value = concat(
+    module.node_ap[*].instance_id,
+    module.node_us[*].instance_id,
+    module.node_eu[*].instance_id,
   )
 }
 
