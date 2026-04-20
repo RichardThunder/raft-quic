@@ -100,30 +100,106 @@ Each Raft RPC uses one QUIC bidirectional stream: request frame then response fr
 
 ## AWS Cluster (Same-region & Cross-region)
 
-```bash
-# Prerequisites: terraform ≥ 1.5, aws configure, go ≥ 1.23
-cd raft-quic
+### Prerequisites
 
-# Same region (3 nodes in ap-east-1 Hong Kong)
+```bash
+# Tools: terraform >= 1.5, aws configure, go >= 1.23, python3
+aws configure          # set Access Key, Secret, default region
+terraform -version
+go version
+```
+
+### Deploy
+
+```bash
+# Same-region (3 nodes, ap-east-1 Hong Kong by default)
 ./deploy/deploy.sh same-region
 
-# Cross region (HK + US-East + EU-West) — uses extended Raft timeouts
+# Cross-region (HK + US-East + EU-West) — uses extended Raft timeouts
 ./deploy/deploy.sh cross-region
+```
 
-# Benchmark a single running cluster (reads deploy/cluster.env)
-python3 scripts/benchmark_aws.py
+Both scripts write a `deploy/cluster-<scenario>.env` file with node IPs and instance IDs, consumed by the benchmark scripts.
 
-# Compare same-region vs cross-region side by side
-python3 scripts/benchmark_aws.py --compare \
-  --same-env deploy/cluster-same.env \
-  --cross-env deploy/cluster-cross.env
+### Run Benchmarks
 
-# Destroy infrastructure
+```bash
+# Full benchmark matrix: 3/5/7 nodes × same-region/cross-region × QUIC/TCP
+bash scripts/aws_distributed_test.sh \
+  --cluster-sizes 3,5,7 \
+  --scenarios same-region,cross-region \
+  --writes 500 \
+  --duration 300 \
+  --monitor
+
+# Lightweight smoke test (3 nodes, same-region only, 5 writes)
+bash scripts/aws_distributed_test.sh \
+  --cluster-sizes 3 \
+  --scenarios same-region \
+  --writes 5 \
+  --duration 5 \
+  --monitor
+
+# Parallel execution (run 2 test cases simultaneously — check EC2 vCPU quota first)
+bash scripts/aws_distributed_test.sh \
+  --cluster-sizes 3,5,7 \
+  --scenarios same-region,cross-region \
+  --writes 500 \
+  --parallel-cases 2
+
+# Skip Terraform deploy (reuse existing cluster from deploy/cluster-*.env)
+bash scripts/aws_distributed_test.sh \
+  --cluster-sizes 3 \
+  --scenarios same-region \
+  --writes 500 \
+  --skip-deploy
+```
+
+Results are saved under `results/distributed_test_<timestamp>/`.
+
+### Visualize Results
+
+```bash
+# Generate 7 individual charts from a benchmark result directory
+conda run -n base python3 scripts/visualize_benchmark.py \
+  --results-dir results/full-benchmark-20260420_132814 \
+  --out-dir results/full-benchmark-20260420_132814/charts
+```
+
+Charts are saved as numbered PNGs:
+
+| File | Content |
+|------|---------|
+| `01_write_throughput.png` | Write throughput bar chart (same-region vs cross-region) |
+| `02_write_latency_percentiles.png` | P50/P95/P99 latency line chart per scenario |
+| `03_read_throughput.png` | Read throughput bar chart |
+| `04_throughput_ratio.png` | TCP / QUIC throughput multiplier |
+| `05_write_error_heatmap.png` | Write error count heatmap |
+| `06_write_throughput_scalability.png` | Throughput vs cluster size |
+| `07_cross_region_p99_delta.png` | P99 latency delta: cross-region minus same-region |
+
+### Collect Live Metrics (optional)
+
+```bash
+# Monitor nodes during a benchmark run (requires cluster-*.env to exist)
+python3 scripts/collect_metrics.py \
+  --nodes node1=<IP1>,node2=<IP2>,node3=<IP3> \
+  --instances node1=<i-xxx>,node2=<i-yyy>,node3=<i-zzz> \
+  --regions node1=us-east-1,node2=us-east-1,node3=us-east-1 \
+  --interval 5 \
+  --duration 300 \
+  --protocols quic,tcp \
+  --out metrics/
+```
+
+### Destroy Infrastructure
+
+```bash
 ./deploy/teardown.sh same-region
 ./deploy/teardown.sh cross-region
 ```
 
-> **Cost note**: t3.micro × 3 costs ~$0.04/hour in ap-east-1. Always `teardown.sh` when done.
+> **Cost note**: t3.micro × 3 costs ~$0.04/hour in ap-east-1. Always run `teardown.sh` when done.
 
 ## Docker Cluster
 
@@ -157,6 +233,58 @@ docker compose down
 | `-join` | (empty) | HTTP address of cluster member to join |
 | `-join-retries` | `10` | Retry attempts when joining fails |
 
+## Benchmark Results (AWS, 2026-04-20)
+
+Full test matrix: **3 / 5 / 7 nodes × same-region / cross-region × QUIC / TCP**, 500 writes per run.
+Infrastructure: `t3.micro` instances; same-region = `us-east-1`; cross-region = HK + US-East + EU-West.
+
+### Write Throughput (ops/s)
+
+| Nodes | QUIC same-region | TCP same-region | QUIC cross-region | TCP cross-region |
+|-------|-----------------|-----------------|-------------------|-----------------|
+| 3     | 0.31            | **1.74**        | 0.35              | **1.33**        |
+| 5     | 0.27            | **1.73**        | 0.25              | **1.74**        |
+| 7     | 0.13            | **1.73**        | 0.29              | **1.80**        |
+
+### Write Latency P99 (ms) — successful writes only
+
+| Nodes | QUIC same-region | TCP same-region | QUIC cross-region | TCP cross-region |
+|-------|-----------------|-----------------|-------------------|-----------------|
+| 3     | 651             | 838             | 707               | 775             |
+| 5     | 582             | 723             | 638               | 1551            |
+| 7     | 834             | 828             | 902               | 610             |
+
+### Read Throughput (ops/s)
+
+Both protocols are consistently **~1.7–1.8 ops/s** across all cluster sizes and deployment scenarios.
+
+### Write Errors (out of 500 writes)
+
+| Protocol | same-region | cross-region |
+|----------|-------------|--------------|
+| QUIC     | 412–461     | 394–427      |
+| TCP      | 0           | 0            |
+
+## Key Findings
+
+1. **QUIC write throughput is 4–13× lower than TCP.**
+   QUIC consistently produced ~400 write errors per 500 attempts (~80% error rate), collapsing effective throughput to 0.13–0.35 ops/s vs TCP's stable 1.3–1.8 ops/s. The root cause is a retry storm: failed writes are retried, serialising what should be parallel streams.
+
+2. **Read throughput is equivalent between QUIC and TCP.**
+   Reads bypass Raft log replication and go directly to the FSM, so the transport layer overhead does not surface. Both protocols sustain ~1.75 ops/s.
+
+3. **When writes succeed, QUIC P99 latency is competitive with TCP.**
+   Across most scenarios QUIC P99 is within ±200 ms of TCP P99. In the same-region 3-node case, QUIC P99 (651 ms) is actually 23% lower than TCP P99 (838 ms), suggesting QUIC's built-in TLS and 0-RTT handshake reduce per-stream setup cost.
+
+4. **Cluster scale hurts QUIC more than TCP (same-region).**
+   TCP write throughput is flat at ~1.73 ops/s regardless of cluster size. QUIC degrades from 0.31 → 0.27 → 0.13 ops/s as nodes grow from 3 → 5 → 7, a 12.9× gap at 7 nodes. More nodes means more AppendEntries streams per write, amplifying the error rate.
+
+5. **Cross-region deployment does not worsen QUIC's relative position.**
+   QUIC's error rate is high in both scenarios, so the additional cross-region RTT (~100–200 ms) is masked by the existing retry overhead. TCP cross-region P99 occasionally spikes (1551 ms at 5 nodes), while QUIC P99 remains more stable, likely because QUIC handles packet loss and reordering natively.
+
+6. **The QUIC transport implementation requires debugging.**
+   The high write error rate is not an inherent QUIC limitation — it points to a bug in stream lifecycle management or error handling in `transport/transport.go`. Fixing this is the highest-priority next step before any further performance comparison is meaningful.
+
 ## Troubleshooting
 
 **`connection refused` on join**: The bootstrap node needs a moment to elect itself leader (~200 ms). The joining node waits 500 ms automatically, but if the bootstrap node is slow, retry.
@@ -166,3 +294,9 @@ docker compose down
 **QUIC idle timeout**: The QUIC config sets `MaxIdleTimeout=30s` and `KeepAlivePeriod=10s` to prevent connections from dropping during election pauses.
 
 **`operation not permitted` on macOS**: QUIC uses UDP. macOS firewalls/VPNs occasionally block loopback UDP — disable or add an exception.
+
+**EC2 vCPU quota for parallel benchmarks**: The default on-demand standard instance quota is 16 vCPU. Running all 6 test cases in parallel requires up to 30 instances simultaneously. Use `--parallel-cases 2` to stay within the default quota, or request a quota increase via:
+```bash
+aws service-quotas request-service-quota-increase \
+  --service-code ec2 --quota-code L-1216C47A --desired-value 64
+```

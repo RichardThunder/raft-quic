@@ -10,6 +10,11 @@ import (
 	"github.com/hashicorp/raft"
 )
 
+const (
+	pipelineQueueSize = 1024
+	pipelineWorkers   = 32
+)
+
 // inflightFuture tracks an in-flight AppendEntries call sent through the pipeline.
 type inflightFuture struct {
 	req       *raft.AppendEntriesRequest
@@ -25,16 +30,17 @@ func (f *inflightFuture) Request() *raft.AppendEntriesRequest   { return f.req }
 func (f *inflightFuture) Response() *raft.AppendEntriesResponse { <-f.done; return f.resp }
 
 // QuicPipeline implements raft.AppendPipeline.
-// Each AppendEntries call opens a fresh QUIC stream (streams are cheap).
-// A background goroutine reads responses and resolves futures.
+// Requests are enqueued to a bounded worker pool so AppendEntries doesn't create
+// unbounded goroutines/streams under high load.
 type QuicPipeline struct {
 	trans  *QuicTransport
 	id     raft.ServerID
 	target raft.ServerAddress
 
-	doneCh   chan raft.AppendFuture
-	inflight chan *inflightFuture
+	doneCh chan raft.AppendFuture
+	reqCh  chan *inflightFuture
 
+	wg           sync.WaitGroup
 	shutdownOnce sync.Once
 	shutdownCh   chan struct{}
 }
@@ -44,11 +50,14 @@ func newQuicPipeline(t *QuicTransport, id raft.ServerID, target raft.ServerAddre
 		trans:      t,
 		id:         id,
 		target:     target,
-		doneCh:     make(chan raft.AppendFuture, 16),
-		inflight:   make(chan *inflightFuture, 16),
+		doneCh:     make(chan raft.AppendFuture, pipelineQueueSize),
+		reqCh:      make(chan *inflightFuture, pipelineQueueSize),
 		shutdownCh: make(chan struct{}),
 	}
-	go p.decodingLoop()
+	for i := 0; i < pipelineWorkers; i++ {
+		p.wg.Add(1)
+		go p.worker()
+	}
 	return p, nil
 }
 
@@ -67,28 +76,38 @@ func (p *QuicPipeline) AppendEntries(args *raft.AppendEntriesRequest, resp *raft
 		done:      make(chan struct{}),
 	}
 
-	// Send on a new stream.
-	go func() {
-		if err := p.sendOne(args, resp, future); err != nil {
-			future.err = err
-			close(future.done)
-			select {
-			case p.doneCh <- future:
-			case <-p.shutdownCh:
-			}
-			return
-		}
-		// Successfully sent; decodingLoop will complete the future.
-		select {
-		case p.inflight <- future:
-		case <-p.shutdownCh:
-		}
-	}()
+	select {
+	case p.reqCh <- future:
+	case <-p.shutdownCh:
+		return nil, fmt.Errorf("pipeline closed")
+	}
 
 	return future, nil
 }
 
-func (p *QuicPipeline) sendOne(args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse, future *inflightFuture) error {
+func (p *QuicPipeline) worker() {
+	defer p.wg.Done()
+
+	for {
+		select {
+		case future := <-p.reqCh:
+			if future == nil {
+				continue
+			}
+			future.err = p.sendOne(future.req, future.resp)
+			close(future.done)
+			select {
+			case p.doneCh <- future:
+			case <-p.shutdownCh:
+				return
+			}
+		case <-p.shutdownCh:
+			return
+		}
+	}
+}
+
+func (p *QuicPipeline) sendOne(args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) error {
 	ctx, cancel := context.WithTimeout(context.Background(), rpcTimeout)
 	defer cancel()
 
@@ -128,23 +147,6 @@ func (p *QuicPipeline) sendOne(args *raft.AppendEntriesRequest, resp *raft.Appen
 	return nil
 }
 
-// decodingLoop waits for completed inflight futures and pushes them to doneCh.
-func (p *QuicPipeline) decodingLoop() {
-	for {
-		select {
-		case future := <-p.inflight:
-			close(future.done)
-			select {
-			case p.doneCh <- future:
-			case <-p.shutdownCh:
-				return
-			}
-		case <-p.shutdownCh:
-			return
-		}
-	}
-}
-
 // Consumer implements raft.AppendPipeline.
 func (p *QuicPipeline) Consumer() <-chan raft.AppendFuture {
 	return p.doneCh
@@ -152,6 +154,29 @@ func (p *QuicPipeline) Consumer() <-chan raft.AppendFuture {
 
 // Close implements raft.AppendPipeline.
 func (p *QuicPipeline) Close() error {
-	p.shutdownOnce.Do(func() { close(p.shutdownCh) })
+	p.shutdownOnce.Do(func() {
+		close(p.shutdownCh)
+		p.wg.Wait()
+		p.failPending()
+	})
 	return nil
+}
+
+func (p *QuicPipeline) failPending() {
+	for {
+		select {
+		case future := <-p.reqCh:
+			if future == nil {
+				continue
+			}
+			future.err = fmt.Errorf("pipeline closed")
+			close(future.done)
+			select {
+			case p.doneCh <- future:
+			default:
+			}
+		default:
+			return
+		}
+	}
 }

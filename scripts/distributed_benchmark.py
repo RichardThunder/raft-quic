@@ -114,22 +114,46 @@ class AwsClusterManager:
 
     def _ensure_linux_binaries(self):
         os.makedirs(os.path.dirname(self.tcp_binary), exist_ok=True)
+        self._build_linux_binary_if_needed(self.raft_binary, "./cmd/raftd", "raftd")
+        self._build_linux_binary_if_needed(self.tcp_binary, "./cmd/tcp-server", "tcp-server")
 
-        if not os.path.exists(self.raft_binary):
-            print("[*] 构建 raftd Linux 二进制...", flush=True)
+    def _build_linux_binary_if_needed(self, binary_path: str, package: str, name: str):
+        if self._linux_binary_needs_rebuild(binary_path):
+            reason = "缺失" if not os.path.exists(binary_path) else "源码更新"
+            print(f"[*] 构建 {name} Linux 二进制 ({reason})...", flush=True)
             self._run_cmd(
-                ["go", "build", "-o", self.raft_binary, "./cmd/raftd"],
+                ["go", "build", "-o", binary_path, package],
                 cwd=self.repo_root,
                 env=self._go_linux_env(),
             )
+            return
+        print(f"[+] {name} Linux 二进制已是最新", flush=True)
 
-        if not os.path.exists(self.tcp_binary):
-            print("[*] 构建 tcp-server Linux 二进制...", flush=True)
-            self._run_cmd(
-                ["go", "build", "-o", self.tcp_binary, "./cmd/tcp-server"],
-                cwd=self.repo_root,
-                env=self._go_linux_env(),
-            )
+    def _linux_binary_needs_rebuild(self, binary_path: str) -> bool:
+        if not os.path.exists(binary_path):
+            return True
+
+        binary_mtime = os.path.getmtime(binary_path)
+        return self._latest_go_source_mtime() > binary_mtime
+
+    def _latest_go_source_mtime(self) -> float:
+        latest_mtime = 0.0
+        skip_dirs = {".git", "results"}
+
+        for root, dirs, files in os.walk(self.repo_root):
+            dirs[:] = [d for d in dirs if d not in skip_dirs]
+            for name in files:
+                if not name.endswith(".go"):
+                    continue
+                path = os.path.join(root, name)
+                try:
+                    mtime = os.path.getmtime(path)
+                except OSError:
+                    continue
+                if mtime > latest_mtime:
+                    latest_mtime = mtime
+
+        return latest_mtime
 
     @staticmethod
     def _go_linux_env() -> Dict[str, str]:
@@ -393,7 +417,8 @@ class AwsClusterManager:
         self._start_node_via_ssm(
             node_id=bootstrap_id,
             ip=bootstrap_ip,
-            join_addr=None,
+            quic_join_http=None,
+            tcp_join_http=None,
             heartbeat_timeout=hb_timeout,
             election_timeout=el_timeout,
             artifacts=artifacts,
@@ -405,60 +430,95 @@ class AwsClusterManager:
             self._start_node_via_ssm(
                 node_id=node_id,
                 ip=ip,
-                join_addr=f"{bootstrap_ip}:8001",
+                quic_join_http=f"{bootstrap_ip}:8001",
+                tcp_join_http=f"{bootstrap_ip}:9001",
                 heartbeat_timeout=hb_timeout,
                 election_timeout=el_timeout,
                 artifacts=artifacts,
             )
 
     def _wait_for_cluster_ready(self, nodes: Dict[str, str], timeout_s: int = 90):
-        print("[*] 等待集群状态稳定...", flush=True)
+        print("[*] 等待 QUIC/TCP 集群状态稳定...", flush=True)
         deadline = time.monotonic() + timeout_s
+        protocols = [("quic", 8001), ("tcp", 9001)]
+        last_snapshot: Dict[str, Dict[str, int]] = {}
         while time.monotonic() < deadline:
-            reachable = 0
-            leaders = 0
-            for ip in nodes.values():
-                status = self._fetch_status(ip)
-                if status is None:
-                    continue
-                reachable += 1
-                if status.get("is_leader") or status.get("state") == "Leader":
-                    leaders += 1
-            if reachable == len(nodes) and leaders >= 1:
+            all_ready = True
+            snapshot: Dict[str, Dict[str, int]] = {}
+            for protocol, port in protocols:
+                reachable = 0
+                leaders = 0
+                for ip in nodes.values():
+                    status = self._fetch_status(ip, port=port)
+                    if status is None:
+                        continue
+                    reachable += 1
+                    if status.get("is_leader") or status.get("state") == "Leader":
+                        leaders += 1
+                snapshot[protocol] = {"reachable": reachable, "leaders": leaders}
+                if not (reachable == len(nodes) and leaders >= 1):
+                    all_ready = False
+            if all_ready:
                 print("[+] 集群状态已就绪", flush=True)
                 return
+            last_snapshot = snapshot
             time.sleep(2)
-        raise RuntimeError("集群未在超时内就绪")
+
+        details = []
+        for protocol, _ in protocols:
+            stat = last_snapshot.get(protocol)
+            if not stat:
+                continue
+            details.append(
+                f"{protocol}: reachable={stat['reachable']}/{len(nodes)}, leaders={stat['leaders']}"
+            )
+        detail_msg = "; ".join(details) if details else "无状态数据"
+        raise RuntimeError(f"集群未在超时内就绪 ({detail_msg})")
 
     def _start_node_via_ssm(
         self,
         node_id: str,
         ip: str,
-        join_addr: Optional[str],
+        quic_join_http: Optional[str],
+        tcp_join_http: Optional[str],
         heartbeat_timeout: str,
         election_timeout: str,
         artifacts: Dict[str, str],
     ):
-        raft_cmd = (
+        quic_cmd = (
             f"/opt/raft-quic/raftd -id {shlex.quote(node_id)} "
             f"-bind 0.0.0.0:7001 -advertise {shlex.quote(f'{ip}:7001')} "
             f"-http 0.0.0.0:8001 "
             f"-heartbeat-timeout {shlex.quote(heartbeat_timeout)} "
             f"-election-timeout {shlex.quote(election_timeout)}"
         )
-        if join_addr:
-            raft_cmd += f" -join {shlex.quote(join_addr)} -join-retries 20"
+        if quic_join_http:
+            quic_cmd += f" -join {shlex.quote(quic_join_http)} -join-retries 20"
+
+        tcp_cmd = (
+            f"/opt/raft-quic/tcp-server -id {shlex.quote(node_id)} "
+            f"-bind 0.0.0.0:9007 -advertise {shlex.quote(f'{ip}:9007')} "
+            f"-http 0.0.0.0:9001 "
+            f"-heartbeat-timeout {shlex.quote(heartbeat_timeout)} "
+            f"-election-timeout {shlex.quote(election_timeout)}"
+        )
+        if tcp_join_http:
+            tcp_cmd += f" -join {shlex.quote(tcp_join_http)} -join-retries 20"
 
         commands = [
             "set -euo pipefail",
             "sudo mkdir -p /opt/raft-quic",
+            "sudo mkdir -p /var/lib/raft-quic/quic /var/lib/raft-quic/tcp",
             f"sudo curl -fsSL {shlex.quote(artifacts['raftd'])} -o /opt/raft-quic/raftd",
             f"sudo curl -fsSL {shlex.quote(artifacts['tcp_server'])} -o /opt/raft-quic/tcp-server",
             "sudo chmod +x /opt/raft-quic/raftd /opt/raft-quic/tcp-server",
             "sudo pkill -f '/opt/raft-quic/raftd' >/dev/null 2>&1 || true",
             "sudo pkill -f '/opt/raft-quic/tcp-server' >/dev/null 2>&1 || true",
-            "sudo nohup /opt/raft-quic/tcp-server -bind 0.0.0.0:9001 > /var/log/tcp-server.log 2>&1 &",
-            f"sudo nohup {raft_cmd} > /var/log/raftd.log 2>&1 &",
+            f"sudo nohup {quic_cmd} > /var/log/raftd.log 2>&1 &",
+            f"sudo nohup {tcp_cmd} > /var/log/tcp-server.log 2>&1 &",
+            "sleep 2",
+            "sudo pgrep -f '/opt/raft-quic/raftd' >/dev/null || { echo 'raftd 未成功启动，日志如下:' >&2; sudo tail -n 80 /var/log/raftd.log >&2 || true; exit 1; }",
+            "sudo pgrep -f '/opt/raft-quic/tcp-server' >/dev/null || { echo 'tcp-server 未成功启动，日志如下:' >&2; sudo tail -n 80 /var/log/tcp-server.log >&2 || true; exit 1; }",
         ]
         self._run_ssm_commands(node_id, commands)
 
@@ -561,8 +621,8 @@ class AwsClusterManager:
             return ("1s", "2s")
         return ("150ms", "300ms")
 
-    def _fetch_status(self, ip: str) -> Optional[Dict]:
-        url = f"http://{ip}:8001/status"
+    def _fetch_status(self, ip: str, port: int = 8001) -> Optional[Dict]:
+        url = f"http://{ip}:{port}/status"
         try:
             with urllib.request.urlopen(url, timeout=3) as resp:
                 if resp.status != 200:
@@ -786,7 +846,33 @@ class DistributedBenchmark:
         self.nodes = nodes
         self.cluster_size = cluster_size
         self.scenario = scenario
-        self.leader_ip: Optional[str] = None
+        self.leader_ips: Dict[str, Optional[str]] = {"quic": None, "tcp": None}
+
+    @staticmethod
+    def _port_for_protocol(protocol: str) -> int:
+        if protocol == "quic":
+            return 8001
+        if protocol == "tcp":
+            return 9001
+        raise ValueError(f"unsupported protocol: {protocol}")
+
+    @staticmethod
+    def _extract_leader_ip(body: str) -> Optional[str]:
+        match = re.search(r"leader is\s+([^\s]+)", body or "")
+        if not match:
+            return None
+        addr = match.group(1).strip()
+        if not addr:
+            return None
+        if ":" in addr:
+            host = addr.rsplit(":", 1)[0]
+            if host.startswith("[") and host.endswith("]"):
+                host = host[1:-1]
+            return host or None
+        return addr
+
+    def _current_target_ip(self, protocol: str, fallback_ip: str) -> str:
+        return self.leader_ips.get(protocol) or fallback_ip
 
     def run_benchmark(self, writes: int, duration: int, protocol: str = "quic") -> Dict:
         print(
@@ -794,11 +880,11 @@ class DistributedBenchmark:
             flush=True,
         )
 
-        if not self._find_leader():
+        if not self._find_leader(protocol=protocol, retries=45, wait_s=1.0, allow_fallback=True):
             print("[!] 无法找到 leader，跳过该轮", flush=True)
             return {}
 
-        target_ip = self.leader_ip or next(iter(self.nodes.values()))
+        target_ip = self._current_target_ip(protocol, next(iter(self.nodes.values())))
         benchmark_data = self._run_write_benchmark(writes, protocol, target_ip)
         latency_data = self._run_latency_benchmark(duration, protocol, target_ip)
         read_data = self._run_read_benchmark(max(writes // 2, 1), protocol, target_ip)
@@ -823,10 +909,17 @@ class DistributedBenchmark:
             "timestamp": datetime.now().isoformat(),
         }
 
-    def _find_leader(self, retries: int = 30, wait_s: float = 1.0) -> bool:
+    def _find_leader(
+        self,
+        protocol: str,
+        retries: int = 30,
+        wait_s: float = 1.0,
+        allow_fallback: bool = True,
+    ) -> bool:
+        port = self._port_for_protocol(protocol)
         for _ in range(retries):
             for node_id, ip in self.nodes.items():
-                status, _, body = self._http_request("GET", ip, 8001, "/status", None, timeout=3)
+                status, _, body = self._http_request("GET", ip, port, "/status", None, timeout=3)
                 if status != 200 or not body:
                     continue
                 try:
@@ -834,18 +927,21 @@ class DistributedBenchmark:
                 except json.JSONDecodeError:
                     continue
                 if payload.get("is_leader") or payload.get("state") == "Leader":
-                    self.leader_ip = ip
-                    print(f"[+] 发现 leader: {node_id} ({ip})", flush=True)
+                    if self.leader_ips.get(protocol) != ip:
+                        print(f"[+] 发现 {protocol.upper()} leader: {node_id} ({ip})", flush=True)
+                    self.leader_ips[protocol] = ip
                     return True
             time.sleep(wait_s)
 
-        if self.nodes:
-            self.leader_ip = next(iter(self.nodes.values()))
-            print(f"[!] 未检测到 leader，回退到首节点: {self.leader_ip}", flush=True)
-        return self.leader_ip is not None
+        if allow_fallback and self.nodes:
+            fallback = next(iter(self.nodes.values()))
+            self.leader_ips[protocol] = fallback
+            print(f"[!] 未检测到 {protocol.upper()} leader，回退到首节点: {fallback}", flush=True)
+            return True
+        return False
 
     def _run_write_benchmark(self, writes: int, protocol: str, ip: str) -> Dict:
-        port = 8001 if protocol == "quic" else 9001
+        port = self._port_for_protocol(protocol)
         latencies: List[float] = []
         errors = 0
         error_503 = 0
@@ -855,16 +951,16 @@ class DistributedBenchmark:
         retries = 0
         retry_recovered = 0
         start = time.monotonic()
-        max_attempts = 3 if protocol == "quic" else 2
+        max_attempts = 4
 
         for i in range(writes):
             key = f"bench_{protocol}_{i}"
             value = "".join(random.choices(string.ascii_letters + string.digits, k=32))
-            request_ip = self.leader_ip if protocol == "quic" and self.leader_ip else ip
+            request_ip = self._current_target_ip(protocol, ip)
             recovered = False
 
             for attempt in range(max_attempts):
-                status, elapsed_ms, _, error_kind = self._http_request_detailed(
+                status, elapsed_ms, body, error_kind = self._http_request_detailed(
                     "POST",
                     request_ip,
                     port,
@@ -891,13 +987,18 @@ class DistributedBenchmark:
                         error_other += 1
                     break
 
+                redirect_ip = self._extract_leader_ip(body)
+                if redirect_ip:
+                    self.leader_ips[protocol] = redirect_ip
+                    request_ip = redirect_ip
+
                 retries += 1
                 recovered = True
-                if protocol == "quic":
-                    self._find_leader(retries=5, wait_s=0.2)
-                    if self.leader_ip:
-                        request_ip = self.leader_ip
-                time.sleep(0.1 * (attempt + 1))
+                self._find_leader(protocol=protocol, retries=25, wait_s=0.3, allow_fallback=False)
+                refreshed_ip = self.leader_ips.get(protocol)
+                if refreshed_ip:
+                    request_ip = refreshed_ip
+                time.sleep(min(0.5, 0.1*(attempt + 1)))
 
         elapsed = time.monotonic() - start
         return {
@@ -913,15 +1014,16 @@ class DistributedBenchmark:
         }
 
     def _run_latency_benchmark(self, duration: int, protocol: str, ip: str) -> Dict:
-        port = 8001 if protocol == "quic" else 9001
+        port = self._port_for_protocol(protocol)
         latencies: List[float] = []
         start = time.monotonic()
 
         while time.monotonic() - start < duration:
             key = f"latency_{protocol}_{int(time.time() * 1000)}"
-            status, elapsed_ms, _ = self._http_request(
+            request_ip = self._current_target_ip(protocol, ip)
+            status, elapsed_ms, body, error_kind = self._http_request_detailed(
                 "POST",
-                ip,
+                request_ip,
                 port,
                 "/set",
                 {"key": key, "value": "test_value"},
@@ -929,6 +1031,17 @@ class DistributedBenchmark:
             )
             if status == 200:
                 latencies.append(elapsed_ms)
+            else:
+                redirect_ip = self._extract_leader_ip(body)
+                if redirect_ip:
+                    self.leader_ips[protocol] = redirect_ip
+                if status == 503 or error_kind:
+                    self._find_leader(
+                        protocol=protocol,
+                        retries=12,
+                        wait_s=0.25,
+                        allow_fallback=False,
+                    )
             time.sleep(0.1)
 
         if not latencies:
@@ -942,10 +1055,32 @@ class DistributedBenchmark:
         }
 
     def _run_read_benchmark(self, reads: int, protocol: str, ip: str) -> Dict:
-        port = 8001 if protocol == "quic" else 9001
+        port = self._port_for_protocol(protocol)
         seed_keys = [f"read_key_{i}" for i in range(min(10, reads))]
         for key in seed_keys:
-            self._http_request("POST", ip, port, "/set", {"key": key, "value": "seed_value"})
+            request_ip = self._current_target_ip(protocol, ip)
+            for _ in range(3):
+                status, _, body, error_kind = self._http_request_detailed(
+                    "POST",
+                    request_ip,
+                    port,
+                    "/set",
+                    {"key": key, "value": "seed_value"},
+                    timeout=10,
+                )
+                if status == 200:
+                    break
+                redirect_ip = self._extract_leader_ip(body)
+                if redirect_ip:
+                    self.leader_ips[protocol] = redirect_ip
+                if status == 503 or error_kind:
+                    self._find_leader(
+                        protocol=protocol,
+                        retries=10,
+                        wait_s=0.2,
+                        allow_fallback=False,
+                    )
+                    request_ip = self._current_target_ip(protocol, ip)
 
         latencies: List[float] = []
         errors = 0
@@ -956,9 +1091,10 @@ class DistributedBenchmark:
 
         for i in range(reads):
             key = seed_keys[i % len(seed_keys)]
-            status, elapsed_ms, _ = self._http_request(
+            request_ip = self._current_target_ip(protocol, ip)
+            status, elapsed_ms, body, error_kind = self._http_request_detailed(
                 "GET",
-                ip,
+                request_ip,
                 port,
                 "/get",
                 {"key": key},
@@ -968,6 +1104,16 @@ class DistributedBenchmark:
                 latencies.append(elapsed_ms)
             else:
                 errors += 1
+                redirect_ip = self._extract_leader_ip(body)
+                if redirect_ip:
+                    self.leader_ips[protocol] = redirect_ip
+                if status == 503 or error_kind:
+                    self._find_leader(
+                        protocol=protocol,
+                        retries=10,
+                        wait_s=0.2,
+                        allow_fallback=False,
+                    )
 
         elapsed = time.monotonic() - start
         return {

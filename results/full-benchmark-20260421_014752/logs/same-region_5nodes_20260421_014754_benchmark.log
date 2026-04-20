@@ -1,0 +1,3058 @@
+================================================================================
+分布式性能测试框架 - TCP vs QUIC 对比
+================================================================================
+集群规模: [5]
+场景: ['same-region']
+写操作: 500
+监控: 启用
+================================================================================
+[*] 部署 5 节点 same-region 集群...
+[0m[1mInitializing the backend...[0m
+[0m[1mUpgrading modules...[0m
+- node in ../modules/raft-node
+[0m[1mInitializing provider plugins...[0m
+- Finding hashicorp/tls versions matching "~> 4.0"...
+- Finding hashicorp/local versions matching "~> 2.0"...
+- Finding hashicorp/aws versions matching "~> 5.0"...
+- Installing hashicorp/tls v4.2.1...
+- Installed hashicorp/tls v4.2.1 (signed by HashiCorp)
+- Installing hashicorp/local v2.8.0...
+- Installed hashicorp/local v2.8.0 (signed by HashiCorp)
+- Installing hashicorp/aws v5.100.0...
+- Installed hashicorp/aws v5.100.0 (signed by HashiCorp)
+
+[0m[1m[32mTerraform has been successfully initialized![0m[32m[0m
+[0m[32m
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.[0m
+[0m[1mmodule.node[0].data.aws_iam_policy_document.ec2_assume_role: Reading...[0m[0m
+[0m[1mmodule.node[2].data.aws_ami.al2023: Reading...[0m[0m
+[0m[1mmodule.node[3].data.aws_ami.al2023: Reading...[0m[0m
+[0m[1mmodule.node[1].data.aws_iam_policy_document.ec2_assume_role: Reading...[0m[0m
+[0m[1mmodule.node[4].data.aws_iam_policy_document.ec2_assume_role: Reading...[0m[0m
+[0m[1mmodule.node[3].data.aws_iam_policy_document.ec2_assume_role: Reading...[0m[0m
+[0m[1mmodule.node[1].data.aws_ami.al2023: Reading...[0m[0m
+[0m[1mmodule.node[4].data.aws_ami.al2023: Reading...[0m[0m
+[0m[1mmodule.node[2].data.aws_iam_policy_document.ec2_assume_role: Reading...[0m[0m
+[0m[1mmodule.node[0].data.aws_ami.al2023: Reading...[0m[0m
+[0m[1mmodule.node[1].data.aws_iam_policy_document.ec2_assume_role: Read complete after 0s [id=2851119427][0m
+[0m[1mmodule.node[2].data.aws_iam_policy_document.ec2_assume_role: Read complete after 0s [id=2851119427][0m
+[0m[1mmodule.node[3].data.aws_iam_policy_document.ec2_assume_role: Read complete after 0s [id=2851119427][0m
+[0m[1mmodule.node[0].data.aws_iam_policy_document.ec2_assume_role: Read complete after 0s [id=2851119427][0m
+[0m[1mmodule.node[4].data.aws_iam_policy_document.ec2_assume_role: Read complete after 0s [id=2851119427][0m
+[0m[1mmodule.node[1].data.aws_ami.al2023: Read complete after 3s [id=ami-0102a36b3e9d5e4df][0m
+[0m[1mmodule.node[3].data.aws_ami.al2023: Read complete after 3s [id=ami-0102a36b3e9d5e4df][0m
+[0m[1mmodule.node[0].data.aws_ami.al2023: Read complete after 3s [id=ami-0102a36b3e9d5e4df][0m
+[0m[1mmodule.node[4].data.aws_ami.al2023: Read complete after 3s [id=ami-0102a36b3e9d5e4df][0m
+[0m[1mmodule.node[2].data.aws_ami.al2023: Read complete after 3s [id=ami-0102a36b3e9d5e4df][0m
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  [32m+[0m create[0m
+
+Terraform will perform the following actions:
+
+[1m  # local_sensitive_file.ssh_key[0m will be created
+[0m  [32m+[0m[0m resource "local_sensitive_file" "ssh_key" {
+      [32m+[0m[0m content              = (sensitive value)
+      [32m+[0m[0m content_base64sha256 = (known after apply)
+      [32m+[0m[0m content_base64sha512 = (known after apply)
+      [32m+[0m[0m content_md5          = (known after apply)
+      [32m+[0m[0m content_sha1         = (known after apply)
+      [32m+[0m[0m content_sha256       = (known after apply)
+      [32m+[0m[0m content_sha512       = (known after apply)
+      [32m+[0m[0m directory_permission = "0700"
+      [32m+[0m[0m file_permission      = "0600"
+      [32m+[0m[0m filename             = "./raft-key.pem"
+      [32m+[0m[0m id                   = (known after apply)
+    }
+
+[1m  # tls_private_key.ssh[0m will be created
+[0m  [32m+[0m[0m resource "tls_private_key" "ssh" {
+      [32m+[0m[0m algorithm                     = "RSA"
+      [32m+[0m[0m ecdsa_curve                   = "P224"
+      [32m+[0m[0m id                            = (known after apply)
+      [32m+[0m[0m private_key_openssh           = (sensitive value)
+      [32m+[0m[0m private_key_pem               = (sensitive value)
+      [32m+[0m[0m private_key_pem_pkcs8         = (sensitive value)
+      [32m+[0m[0m public_key_fingerprint_md5    = (known after apply)
+      [32m+[0m[0m public_key_fingerprint_sha256 = (known after apply)
+      [32m+[0m[0m public_key_openssh            = (known after apply)
+      [32m+[0m[0m public_key_pem                = (known after apply)
+      [32m+[0m[0m rsa_bits                      = 4096
+    }
+
+[1m  # module.node[0].aws_iam_instance_profile.raft_ssm[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_instance_profile" "raft_ssm" {
+      [32m+[0m[0m arn         = (known after apply)
+      [32m+[0m[0m create_date = (known after apply)
+      [32m+[0m[0m id          = (known after apply)
+      [32m+[0m[0m name        = "sameregi6865-raft-quic-same-ssm-node1"
+      [32m+[0m[0m name_prefix = (known after apply)
+      [32m+[0m[0m path        = "/"
+      [32m+[0m[0m role        = "sameregi6865-raft-quic-same-ssm-node1"
+      [32m+[0m[0m tags_all    = (known after apply)
+      [32m+[0m[0m unique_id   = (known after apply)
+    }
+
+[1m  # module.node[0].aws_iam_role.raft_ssm[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role" "raft_ssm" {
+      [32m+[0m[0m arn                   = (known after apply)
+      [32m+[0m[0m assume_role_policy    = jsonencode(
+            {
+              [32m+[0m[0m Statement = [
+                  [32m+[0m[0m {
+                      [32m+[0m[0m Action    = "sts:AssumeRole"
+                      [32m+[0m[0m Effect    = "Allow"
+                      [32m+[0m[0m Principal = {
+                          [32m+[0m[0m Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              [32m+[0m[0m Version   = "2012-10-17"
+            }
+        )
+      [32m+[0m[0m create_date           = (known after apply)
+      [32m+[0m[0m force_detach_policies = false
+      [32m+[0m[0m id                    = (known after apply)
+      [32m+[0m[0m managed_policy_arns   = (known after apply)
+      [32m+[0m[0m max_session_duration  = 3600
+      [32m+[0m[0m name                  = "sameregi6865-raft-quic-same-ssm-node1"
+      [32m+[0m[0m name_prefix           = (known after apply)
+      [32m+[0m[0m path                  = "/"
+      [32m+[0m[0m tags                  = {
+          [32m+[0m[0m "Node"    = "node1"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all              = {
+          [32m+[0m[0m "Node"    = "node1"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m unique_id             = (known after apply)
+
+      [32m+[0m[0m inline_policy (known after apply)
+    }
+
+[1m  # module.node[0].aws_iam_role_policy_attachment.ssm_core[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role_policy_attachment" "ssm_core" {
+      [32m+[0m[0m id         = (known after apply)
+      [32m+[0m[0m policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      [32m+[0m[0m role       = "sameregi6865-raft-quic-same-ssm-node1"
+    }
+
+[1m  # module.node[0].aws_instance.node[0m will be created
+[0m  [32m+[0m[0m resource "aws_instance" "node" {
+      [32m+[0m[0m ami                                  = "ami-0102a36b3e9d5e4df"
+      [32m+[0m[0m arn                                  = (known after apply)
+      [32m+[0m[0m associate_public_ip_address          = true
+      [32m+[0m[0m availability_zone                    = (known after apply)
+      [32m+[0m[0m cpu_core_count                       = (known after apply)
+      [32m+[0m[0m cpu_threads_per_core                 = (known after apply)
+      [32m+[0m[0m disable_api_stop                     = (known after apply)
+      [32m+[0m[0m disable_api_termination              = (known after apply)
+      [32m+[0m[0m ebs_optimized                        = (known after apply)
+      [32m+[0m[0m enable_primary_ipv6                  = (known after apply)
+      [32m+[0m[0m get_password_data                    = false
+      [32m+[0m[0m host_id                              = (known after apply)
+      [32m+[0m[0m host_resource_group_arn              = (known after apply)
+      [32m+[0m[0m iam_instance_profile                 = "sameregi6865-raft-quic-same-ssm-node1"
+      [32m+[0m[0m id                                   = (known after apply)
+      [32m+[0m[0m instance_initiated_shutdown_behavior = (known after apply)
+      [32m+[0m[0m instance_lifecycle                   = (known after apply)
+      [32m+[0m[0m instance_state                       = (known after apply)
+      [32m+[0m[0m instance_type                        = "t3.micro"
+      [32m+[0m[0m ipv6_address_count                   = (known after apply)
+      [32m+[0m[0m ipv6_addresses                       = (known after apply)
+      [32m+[0m[0m key_name                             = "sameregi6865-raft-quic-same-node1"
+      [32m+[0m[0m monitoring                           = (known after apply)
+      [32m+[0m[0m outpost_arn                          = (known after apply)
+      [32m+[0m[0m password_data                        = (known after apply)
+      [32m+[0m[0m placement_group                      = (known after apply)
+      [32m+[0m[0m placement_partition_number           = (known after apply)
+      [32m+[0m[0m primary_network_interface_id         = (known after apply)
+      [32m+[0m[0m private_dns                          = (known after apply)
+      [32m+[0m[0m private_ip                           = (known after apply)
+      [32m+[0m[0m public_dns                           = (known after apply)
+      [32m+[0m[0m public_ip                            = (known after apply)
+      [32m+[0m[0m secondary_private_ips                = (known after apply)
+      [32m+[0m[0m security_groups                      = (known after apply)
+      [32m+[0m[0m source_dest_check                    = true
+      [32m+[0m[0m spot_instance_request_id             = (known after apply)
+      [32m+[0m[0m subnet_id                            = (known after apply)
+      [32m+[0m[0m tags                                 = {
+          [32m+[0m[0m "Name"    = "sameregi6865-raft-quic-node1"
+          [32m+[0m[0m "Node"    = "node1"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all                             = {
+          [32m+[0m[0m "Name"    = "sameregi6865-raft-quic-node1"
+          [32m+[0m[0m "Node"    = "node1"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tenancy                              = (known after apply)
+      [32m+[0m[0m user_data                            = (known after apply)
+      [32m+[0m[0m user_data_base64                     = (known after apply)
+      [32m+[0m[0m user_data_replace_on_change          = false
+      [32m+[0m[0m vpc_security_group_ids               = (known after apply)
+
+      [32m+[0m[0m capacity_reservation_specification (known after apply)
+
+      [32m+[0m[0m cpu_options (known after apply)
+
+      [32m+[0m[0m ebs_block_device (known after apply)
+
+      [32m+[0m[0m enclave_options (known after apply)
+
+      [32m+[0m[0m ephemeral_block_device (known after apply)
+
+      [32m+[0m[0m instance_market_options (known after apply)
+
+      [32m+[0m[0m maintenance_options (known after apply)
+
+      [32m+[0m[0m metadata_options (known after apply)
+
+      [32m+[0m[0m network_interface (known after apply)
+
+      [32m+[0m[0m private_dns_name_options (known after apply)
+
+      [32m+[0m[0m root_block_device (known after apply)
+    }
+
+[1m  # module.node[0].aws_key_pair.raft[0m will be created
+[0m  [32m+[0m[0m resource "aws_key_pair" "raft" {
+      [32m+[0m[0m arn             = (known after apply)
+      [32m+[0m[0m fingerprint     = (known after apply)
+      [32m+[0m[0m id              = (known after apply)
+      [32m+[0m[0m key_name        = "sameregi6865-raft-quic-same-node1"
+      [32m+[0m[0m key_name_prefix = (known after apply)
+      [32m+[0m[0m key_pair_id     = (known after apply)
+      [32m+[0m[0m key_type        = (known after apply)
+      [32m+[0m[0m public_key      = (known after apply)
+      [32m+[0m[0m tags            = {
+          [32m+[0m[0m "Node"    = "node1"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all        = {
+          [32m+[0m[0m "Node"    = "node1"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+    }
+
+[1m  # module.node[0].aws_security_group.raft[0m will be created
+[0m  [32m+[0m[0m resource "aws_security_group" "raft" {
+      [32m+[0m[0m arn                    = (known after apply)
+      [32m+[0m[0m description            = "Raft-over-QUIC cluster node node1"
+      [32m+[0m[0m egress                 = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 0
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "-1"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 0
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ]
+      [32m+[0m[0m id                     = (known after apply)
+      [32m+[0m[0m ingress                = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 22
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 22
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 7001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "udp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 7001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 8001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 8001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 9001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 9001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ]
+      [32m+[0m[0m name                   = "sameregi6865-raft-quic-node1"
+      [32m+[0m[0m name_prefix            = (known after apply)
+      [32m+[0m[0m owner_id               = (known after apply)
+      [32m+[0m[0m revoke_rules_on_delete = false
+      [32m+[0m[0m tags                   = {
+          [32m+[0m[0m "Node"    = "node1"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all               = {
+          [32m+[0m[0m "Node"    = "node1"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m vpc_id                 = (known after apply)
+    }
+
+[1m  # module.node[1].aws_iam_instance_profile.raft_ssm[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_instance_profile" "raft_ssm" {
+      [32m+[0m[0m arn         = (known after apply)
+      [32m+[0m[0m create_date = (known after apply)
+      [32m+[0m[0m id          = (known after apply)
+      [32m+[0m[0m name        = "sameregi6865-raft-quic-same-ssm-node2"
+      [32m+[0m[0m name_prefix = (known after apply)
+      [32m+[0m[0m path        = "/"
+      [32m+[0m[0m role        = "sameregi6865-raft-quic-same-ssm-node2"
+      [32m+[0m[0m tags_all    = (known after apply)
+      [32m+[0m[0m unique_id   = (known after apply)
+    }
+
+[1m  # module.node[1].aws_iam_role.raft_ssm[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role" "raft_ssm" {
+      [32m+[0m[0m arn                   = (known after apply)
+      [32m+[0m[0m assume_role_policy    = jsonencode(
+            {
+              [32m+[0m[0m Statement = [
+                  [32m+[0m[0m {
+                      [32m+[0m[0m Action    = "sts:AssumeRole"
+                      [32m+[0m[0m Effect    = "Allow"
+                      [32m+[0m[0m Principal = {
+                          [32m+[0m[0m Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              [32m+[0m[0m Version   = "2012-10-17"
+            }
+        )
+      [32m+[0m[0m create_date           = (known after apply)
+      [32m+[0m[0m force_detach_policies = false
+      [32m+[0m[0m id                    = (known after apply)
+      [32m+[0m[0m managed_policy_arns   = (known after apply)
+      [32m+[0m[0m max_session_duration  = 3600
+      [32m+[0m[0m name                  = "sameregi6865-raft-quic-same-ssm-node2"
+      [32m+[0m[0m name_prefix           = (known after apply)
+      [32m+[0m[0m path                  = "/"
+      [32m+[0m[0m tags                  = {
+          [32m+[0m[0m "Node"    = "node2"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all              = {
+          [32m+[0m[0m "Node"    = "node2"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m unique_id             = (known after apply)
+
+      [32m+[0m[0m inline_policy (known after apply)
+    }
+
+[1m  # module.node[1].aws_iam_role_policy_attachment.ssm_core[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role_policy_attachment" "ssm_core" {
+      [32m+[0m[0m id         = (known after apply)
+      [32m+[0m[0m policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      [32m+[0m[0m role       = "sameregi6865-raft-quic-same-ssm-node2"
+    }
+
+[1m  # module.node[1].aws_instance.node[0m will be created
+[0m  [32m+[0m[0m resource "aws_instance" "node" {
+      [32m+[0m[0m ami                                  = "ami-0102a36b3e9d5e4df"
+      [32m+[0m[0m arn                                  = (known after apply)
+      [32m+[0m[0m associate_public_ip_address          = true
+      [32m+[0m[0m availability_zone                    = (known after apply)
+      [32m+[0m[0m cpu_core_count                       = (known after apply)
+      [32m+[0m[0m cpu_threads_per_core                 = (known after apply)
+      [32m+[0m[0m disable_api_stop                     = (known after apply)
+      [32m+[0m[0m disable_api_termination              = (known after apply)
+      [32m+[0m[0m ebs_optimized                        = (known after apply)
+      [32m+[0m[0m enable_primary_ipv6                  = (known after apply)
+      [32m+[0m[0m get_password_data                    = false
+      [32m+[0m[0m host_id                              = (known after apply)
+      [32m+[0m[0m host_resource_group_arn              = (known after apply)
+      [32m+[0m[0m iam_instance_profile                 = "sameregi6865-raft-quic-same-ssm-node2"
+      [32m+[0m[0m id                                   = (known after apply)
+      [32m+[0m[0m instance_initiated_shutdown_behavior = (known after apply)
+      [32m+[0m[0m instance_lifecycle                   = (known after apply)
+      [32m+[0m[0m instance_state                       = (known after apply)
+      [32m+[0m[0m instance_type                        = "t3.micro"
+      [32m+[0m[0m ipv6_address_count                   = (known after apply)
+      [32m+[0m[0m ipv6_addresses                       = (known after apply)
+      [32m+[0m[0m key_name                             = "sameregi6865-raft-quic-same-node2"
+      [32m+[0m[0m monitoring                           = (known after apply)
+      [32m+[0m[0m outpost_arn                          = (known after apply)
+      [32m+[0m[0m password_data                        = (known after apply)
+      [32m+[0m[0m placement_group                      = (known after apply)
+      [32m+[0m[0m placement_partition_number           = (known after apply)
+      [32m+[0m[0m primary_network_interface_id         = (known after apply)
+      [32m+[0m[0m private_dns                          = (known after apply)
+      [32m+[0m[0m private_ip                           = (known after apply)
+      [32m+[0m[0m public_dns                           = (known after apply)
+      [32m+[0m[0m public_ip                            = (known after apply)
+      [32m+[0m[0m secondary_private_ips                = (known after apply)
+      [32m+[0m[0m security_groups                      = (known after apply)
+      [32m+[0m[0m source_dest_check                    = true
+      [32m+[0m[0m spot_instance_request_id             = (known after apply)
+      [32m+[0m[0m subnet_id                            = (known after apply)
+      [32m+[0m[0m tags                                 = {
+          [32m+[0m[0m "Name"    = "sameregi6865-raft-quic-node2"
+          [32m+[0m[0m "Node"    = "node2"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all                             = {
+          [32m+[0m[0m "Name"    = "sameregi6865-raft-quic-node2"
+          [32m+[0m[0m "Node"    = "node2"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tenancy                              = (known after apply)
+      [32m+[0m[0m user_data                            = (known after apply)
+      [32m+[0m[0m user_data_base64                     = (known after apply)
+      [32m+[0m[0m user_data_replace_on_change          = false
+      [32m+[0m[0m vpc_security_group_ids               = (known after apply)
+
+      [32m+[0m[0m capacity_reservation_specification (known after apply)
+
+      [32m+[0m[0m cpu_options (known after apply)
+
+      [32m+[0m[0m ebs_block_device (known after apply)
+
+      [32m+[0m[0m enclave_options (known after apply)
+
+      [32m+[0m[0m ephemeral_block_device (known after apply)
+
+      [32m+[0m[0m instance_market_options (known after apply)
+
+      [32m+[0m[0m maintenance_options (known after apply)
+
+      [32m+[0m[0m metadata_options (known after apply)
+
+      [32m+[0m[0m network_interface (known after apply)
+
+      [32m+[0m[0m private_dns_name_options (known after apply)
+
+      [32m+[0m[0m root_block_device (known after apply)
+    }
+
+[1m  # module.node[1].aws_key_pair.raft[0m will be created
+[0m  [32m+[0m[0m resource "aws_key_pair" "raft" {
+      [32m+[0m[0m arn             = (known after apply)
+      [32m+[0m[0m fingerprint     = (known after apply)
+      [32m+[0m[0m id              = (known after apply)
+      [32m+[0m[0m key_name        = "sameregi6865-raft-quic-same-node2"
+      [32m+[0m[0m key_name_prefix = (known after apply)
+      [32m+[0m[0m key_pair_id     = (known after apply)
+      [32m+[0m[0m key_type        = (known after apply)
+      [32m+[0m[0m public_key      = (known after apply)
+      [32m+[0m[0m tags            = {
+          [32m+[0m[0m "Node"    = "node2"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all        = {
+          [32m+[0m[0m "Node"    = "node2"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+    }
+
+[1m  # module.node[1].aws_security_group.raft[0m will be created
+[0m  [32m+[0m[0m resource "aws_security_group" "raft" {
+      [32m+[0m[0m arn                    = (known after apply)
+      [32m+[0m[0m description            = "Raft-over-QUIC cluster node node2"
+      [32m+[0m[0m egress                 = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 0
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "-1"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 0
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ]
+      [32m+[0m[0m id                     = (known after apply)
+      [32m+[0m[0m ingress                = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 22
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 22
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 7001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "udp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 7001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 8001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 8001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 9001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 9001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ]
+      [32m+[0m[0m name                   = "sameregi6865-raft-quic-node2"
+      [32m+[0m[0m name_prefix            = (known after apply)
+      [32m+[0m[0m owner_id               = (known after apply)
+      [32m+[0m[0m revoke_rules_on_delete = false
+      [32m+[0m[0m tags                   = {
+          [32m+[0m[0m "Node"    = "node2"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all               = {
+          [32m+[0m[0m "Node"    = "node2"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m vpc_id                 = (known after apply)
+    }
+
+[1m  # module.node[2].aws_iam_instance_profile.raft_ssm[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_instance_profile" "raft_ssm" {
+      [32m+[0m[0m arn         = (known after apply)
+      [32m+[0m[0m create_date = (known after apply)
+      [32m+[0m[0m id          = (known after apply)
+      [32m+[0m[0m name        = "sameregi6865-raft-quic-same-ssm-node3"
+      [32m+[0m[0m name_prefix = (known after apply)
+      [32m+[0m[0m path        = "/"
+      [32m+[0m[0m role        = "sameregi6865-raft-quic-same-ssm-node3"
+      [32m+[0m[0m tags_all    = (known after apply)
+      [32m+[0m[0m unique_id   = (known after apply)
+    }
+
+[1m  # module.node[2].aws_iam_role.raft_ssm[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role" "raft_ssm" {
+      [32m+[0m[0m arn                   = (known after apply)
+      [32m+[0m[0m assume_role_policy    = jsonencode(
+            {
+              [32m+[0m[0m Statement = [
+                  [32m+[0m[0m {
+                      [32m+[0m[0m Action    = "sts:AssumeRole"
+                      [32m+[0m[0m Effect    = "Allow"
+                      [32m+[0m[0m Principal = {
+                          [32m+[0m[0m Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              [32m+[0m[0m Version   = "2012-10-17"
+            }
+        )
+      [32m+[0m[0m create_date           = (known after apply)
+      [32m+[0m[0m force_detach_policies = false
+      [32m+[0m[0m id                    = (known after apply)
+      [32m+[0m[0m managed_policy_arns   = (known after apply)
+      [32m+[0m[0m max_session_duration  = 3600
+      [32m+[0m[0m name                  = "sameregi6865-raft-quic-same-ssm-node3"
+      [32m+[0m[0m name_prefix           = (known after apply)
+      [32m+[0m[0m path                  = "/"
+      [32m+[0m[0m tags                  = {
+          [32m+[0m[0m "Node"    = "node3"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all              = {
+          [32m+[0m[0m "Node"    = "node3"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m unique_id             = (known after apply)
+
+      [32m+[0m[0m inline_policy (known after apply)
+    }
+
+[1m  # module.node[2].aws_iam_role_policy_attachment.ssm_core[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role_policy_attachment" "ssm_core" {
+      [32m+[0m[0m id         = (known after apply)
+      [32m+[0m[0m policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      [32m+[0m[0m role       = "sameregi6865-raft-quic-same-ssm-node3"
+    }
+
+[1m  # module.node[2].aws_instance.node[0m will be created
+[0m  [32m+[0m[0m resource "aws_instance" "node" {
+      [32m+[0m[0m ami                                  = "ami-0102a36b3e9d5e4df"
+      [32m+[0m[0m arn                                  = (known after apply)
+      [32m+[0m[0m associate_public_ip_address          = true
+      [32m+[0m[0m availability_zone                    = (known after apply)
+      [32m+[0m[0m cpu_core_count                       = (known after apply)
+      [32m+[0m[0m cpu_threads_per_core                 = (known after apply)
+      [32m+[0m[0m disable_api_stop                     = (known after apply)
+      [32m+[0m[0m disable_api_termination              = (known after apply)
+      [32m+[0m[0m ebs_optimized                        = (known after apply)
+      [32m+[0m[0m enable_primary_ipv6                  = (known after apply)
+      [32m+[0m[0m get_password_data                    = false
+      [32m+[0m[0m host_id                              = (known after apply)
+      [32m+[0m[0m host_resource_group_arn              = (known after apply)
+      [32m+[0m[0m iam_instance_profile                 = "sameregi6865-raft-quic-same-ssm-node3"
+      [32m+[0m[0m id                                   = (known after apply)
+      [32m+[0m[0m instance_initiated_shutdown_behavior = (known after apply)
+      [32m+[0m[0m instance_lifecycle                   = (known after apply)
+      [32m+[0m[0m instance_state                       = (known after apply)
+      [32m+[0m[0m instance_type                        = "t3.micro"
+      [32m+[0m[0m ipv6_address_count                   = (known after apply)
+      [32m+[0m[0m ipv6_addresses                       = (known after apply)
+      [32m+[0m[0m key_name                             = "sameregi6865-raft-quic-same-node3"
+      [32m+[0m[0m monitoring                           = (known after apply)
+      [32m+[0m[0m outpost_arn                          = (known after apply)
+      [32m+[0m[0m password_data                        = (known after apply)
+      [32m+[0m[0m placement_group                      = (known after apply)
+      [32m+[0m[0m placement_partition_number           = (known after apply)
+      [32m+[0m[0m primary_network_interface_id         = (known after apply)
+      [32m+[0m[0m private_dns                          = (known after apply)
+      [32m+[0m[0m private_ip                           = (known after apply)
+      [32m+[0m[0m public_dns                           = (known after apply)
+      [32m+[0m[0m public_ip                            = (known after apply)
+      [32m+[0m[0m secondary_private_ips                = (known after apply)
+      [32m+[0m[0m security_groups                      = (known after apply)
+      [32m+[0m[0m source_dest_check                    = true
+      [32m+[0m[0m spot_instance_request_id             = (known after apply)
+      [32m+[0m[0m subnet_id                            = (known after apply)
+      [32m+[0m[0m tags                                 = {
+          [32m+[0m[0m "Name"    = "sameregi6865-raft-quic-node3"
+          [32m+[0m[0m "Node"    = "node3"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all                             = {
+          [32m+[0m[0m "Name"    = "sameregi6865-raft-quic-node3"
+          [32m+[0m[0m "Node"    = "node3"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tenancy                              = (known after apply)
+      [32m+[0m[0m user_data                            = (known after apply)
+      [32m+[0m[0m user_data_base64                     = (known after apply)
+      [32m+[0m[0m user_data_replace_on_change          = false
+      [32m+[0m[0m vpc_security_group_ids               = (known after apply)
+
+      [32m+[0m[0m capacity_reservation_specification (known after apply)
+
+      [32m+[0m[0m cpu_options (known after apply)
+
+      [32m+[0m[0m ebs_block_device (known after apply)
+
+      [32m+[0m[0m enclave_options (known after apply)
+
+      [32m+[0m[0m ephemeral_block_device (known after apply)
+
+      [32m+[0m[0m instance_market_options (known after apply)
+
+      [32m+[0m[0m maintenance_options (known after apply)
+
+      [32m+[0m[0m metadata_options (known after apply)
+
+      [32m+[0m[0m network_interface (known after apply)
+
+      [32m+[0m[0m private_dns_name_options (known after apply)
+
+      [32m+[0m[0m root_block_device (known after apply)
+    }
+
+[1m  # module.node[2].aws_key_pair.raft[0m will be created
+[0m  [32m+[0m[0m resource "aws_key_pair" "raft" {
+      [32m+[0m[0m arn             = (known after apply)
+      [32m+[0m[0m fingerprint     = (known after apply)
+      [32m+[0m[0m id              = (known after apply)
+      [32m+[0m[0m key_name        = "sameregi6865-raft-quic-same-node3"
+      [32m+[0m[0m key_name_prefix = (known after apply)
+      [32m+[0m[0m key_pair_id     = (known after apply)
+      [32m+[0m[0m key_type        = (known after apply)
+      [32m+[0m[0m public_key      = (known after apply)
+      [32m+[0m[0m tags            = {
+          [32m+[0m[0m "Node"    = "node3"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all        = {
+          [32m+[0m[0m "Node"    = "node3"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+    }
+
+[1m  # module.node[2].aws_security_group.raft[0m will be created
+[0m  [32m+[0m[0m resource "aws_security_group" "raft" {
+      [32m+[0m[0m arn                    = (known after apply)
+      [32m+[0m[0m description            = "Raft-over-QUIC cluster node node3"
+      [32m+[0m[0m egress                 = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 0
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "-1"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 0
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ]
+      [32m+[0m[0m id                     = (known after apply)
+      [32m+[0m[0m ingress                = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 22
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 22
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 7001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "udp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 7001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 8001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 8001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 9001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 9001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ]
+      [32m+[0m[0m name                   = "sameregi6865-raft-quic-node3"
+      [32m+[0m[0m name_prefix            = (known after apply)
+      [32m+[0m[0m owner_id               = (known after apply)
+      [32m+[0m[0m revoke_rules_on_delete = false
+      [32m+[0m[0m tags                   = {
+          [32m+[0m[0m "Node"    = "node3"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all               = {
+          [32m+[0m[0m "Node"    = "node3"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m vpc_id                 = (known after apply)
+    }
+
+[1m  # module.node[3].aws_iam_instance_profile.raft_ssm[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_instance_profile" "raft_ssm" {
+      [32m+[0m[0m arn         = (known after apply)
+      [32m+[0m[0m create_date = (known after apply)
+      [32m+[0m[0m id          = (known after apply)
+      [32m+[0m[0m name        = "sameregi6865-raft-quic-same-ssm-node4"
+      [32m+[0m[0m name_prefix = (known after apply)
+      [32m+[0m[0m path        = "/"
+      [32m+[0m[0m role        = "sameregi6865-raft-quic-same-ssm-node4"
+      [32m+[0m[0m tags_all    = (known after apply)
+      [32m+[0m[0m unique_id   = (known after apply)
+    }
+
+[1m  # module.node[3].aws_iam_role.raft_ssm[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role" "raft_ssm" {
+      [32m+[0m[0m arn                   = (known after apply)
+      [32m+[0m[0m assume_role_policy    = jsonencode(
+            {
+              [32m+[0m[0m Statement = [
+                  [32m+[0m[0m {
+                      [32m+[0m[0m Action    = "sts:AssumeRole"
+                      [32m+[0m[0m Effect    = "Allow"
+                      [32m+[0m[0m Principal = {
+                          [32m+[0m[0m Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              [32m+[0m[0m Version   = "2012-10-17"
+            }
+        )
+      [32m+[0m[0m create_date           = (known after apply)
+      [32m+[0m[0m force_detach_policies = false
+      [32m+[0m[0m id                    = (known after apply)
+      [32m+[0m[0m managed_policy_arns   = (known after apply)
+      [32m+[0m[0m max_session_duration  = 3600
+      [32m+[0m[0m name                  = "sameregi6865-raft-quic-same-ssm-node4"
+      [32m+[0m[0m name_prefix           = (known after apply)
+      [32m+[0m[0m path                  = "/"
+      [32m+[0m[0m tags                  = {
+          [32m+[0m[0m "Node"    = "node4"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all              = {
+          [32m+[0m[0m "Node"    = "node4"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m unique_id             = (known after apply)
+
+      [32m+[0m[0m inline_policy (known after apply)
+    }
+
+[1m  # module.node[3].aws_iam_role_policy_attachment.ssm_core[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role_policy_attachment" "ssm_core" {
+      [32m+[0m[0m id         = (known after apply)
+      [32m+[0m[0m policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      [32m+[0m[0m role       = "sameregi6865-raft-quic-same-ssm-node4"
+    }
+
+[1m  # module.node[3].aws_instance.node[0m will be created
+[0m  [32m+[0m[0m resource "aws_instance" "node" {
+      [32m+[0m[0m ami                                  = "ami-0102a36b3e9d5e4df"
+      [32m+[0m[0m arn                                  = (known after apply)
+      [32m+[0m[0m associate_public_ip_address          = true
+      [32m+[0m[0m availability_zone                    = (known after apply)
+      [32m+[0m[0m cpu_core_count                       = (known after apply)
+      [32m+[0m[0m cpu_threads_per_core                 = (known after apply)
+      [32m+[0m[0m disable_api_stop                     = (known after apply)
+      [32m+[0m[0m disable_api_termination              = (known after apply)
+      [32m+[0m[0m ebs_optimized                        = (known after apply)
+      [32m+[0m[0m enable_primary_ipv6                  = (known after apply)
+      [32m+[0m[0m get_password_data                    = false
+      [32m+[0m[0m host_id                              = (known after apply)
+      [32m+[0m[0m host_resource_group_arn              = (known after apply)
+      [32m+[0m[0m iam_instance_profile                 = "sameregi6865-raft-quic-same-ssm-node4"
+      [32m+[0m[0m id                                   = (known after apply)
+      [32m+[0m[0m instance_initiated_shutdown_behavior = (known after apply)
+      [32m+[0m[0m instance_lifecycle                   = (known after apply)
+      [32m+[0m[0m instance_state                       = (known after apply)
+      [32m+[0m[0m instance_type                        = "t3.micro"
+      [32m+[0m[0m ipv6_address_count                   = (known after apply)
+      [32m+[0m[0m ipv6_addresses                       = (known after apply)
+      [32m+[0m[0m key_name                             = "sameregi6865-raft-quic-same-node4"
+      [32m+[0m[0m monitoring                           = (known after apply)
+      [32m+[0m[0m outpost_arn                          = (known after apply)
+      [32m+[0m[0m password_data                        = (known after apply)
+      [32m+[0m[0m placement_group                      = (known after apply)
+      [32m+[0m[0m placement_partition_number           = (known after apply)
+      [32m+[0m[0m primary_network_interface_id         = (known after apply)
+      [32m+[0m[0m private_dns                          = (known after apply)
+      [32m+[0m[0m private_ip                           = (known after apply)
+      [32m+[0m[0m public_dns                           = (known after apply)
+      [32m+[0m[0m public_ip                            = (known after apply)
+      [32m+[0m[0m secondary_private_ips                = (known after apply)
+      [32m+[0m[0m security_groups                      = (known after apply)
+      [32m+[0m[0m source_dest_check                    = true
+      [32m+[0m[0m spot_instance_request_id             = (known after apply)
+      [32m+[0m[0m subnet_id                            = (known after apply)
+      [32m+[0m[0m tags                                 = {
+          [32m+[0m[0m "Name"    = "sameregi6865-raft-quic-node4"
+          [32m+[0m[0m "Node"    = "node4"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all                             = {
+          [32m+[0m[0m "Name"    = "sameregi6865-raft-quic-node4"
+          [32m+[0m[0m "Node"    = "node4"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tenancy                              = (known after apply)
+      [32m+[0m[0m user_data                            = (known after apply)
+      [32m+[0m[0m user_data_base64                     = (known after apply)
+      [32m+[0m[0m user_data_replace_on_change          = false
+      [32m+[0m[0m vpc_security_group_ids               = (known after apply)
+
+      [32m+[0m[0m capacity_reservation_specification (known after apply)
+
+      [32m+[0m[0m cpu_options (known after apply)
+
+      [32m+[0m[0m ebs_block_device (known after apply)
+
+      [32m+[0m[0m enclave_options (known after apply)
+
+      [32m+[0m[0m ephemeral_block_device (known after apply)
+
+      [32m+[0m[0m instance_market_options (known after apply)
+
+      [32m+[0m[0m maintenance_options (known after apply)
+
+      [32m+[0m[0m metadata_options (known after apply)
+
+      [32m+[0m[0m network_interface (known after apply)
+
+      [32m+[0m[0m private_dns_name_options (known after apply)
+
+      [32m+[0m[0m root_block_device (known after apply)
+    }
+
+[1m  # module.node[3].aws_key_pair.raft[0m will be created
+[0m  [32m+[0m[0m resource "aws_key_pair" "raft" {
+      [32m+[0m[0m arn             = (known after apply)
+      [32m+[0m[0m fingerprint     = (known after apply)
+      [32m+[0m[0m id              = (known after apply)
+      [32m+[0m[0m key_name        = "sameregi6865-raft-quic-same-node4"
+      [32m+[0m[0m key_name_prefix = (known after apply)
+      [32m+[0m[0m key_pair_id     = (known after apply)
+      [32m+[0m[0m key_type        = (known after apply)
+      [32m+[0m[0m public_key      = (known after apply)
+      [32m+[0m[0m tags            = {
+          [32m+[0m[0m "Node"    = "node4"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all        = {
+          [32m+[0m[0m "Node"    = "node4"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+    }
+
+[1m  # module.node[3].aws_security_group.raft[0m will be created
+[0m  [32m+[0m[0m resource "aws_security_group" "raft" {
+      [32m+[0m[0m arn                    = (known after apply)
+      [32m+[0m[0m description            = "Raft-over-QUIC cluster node node4"
+      [32m+[0m[0m egress                 = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 0
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "-1"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 0
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ]
+      [32m+[0m[0m id                     = (known after apply)
+      [32m+[0m[0m ingress                = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 22
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 22
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 7001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "udp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 7001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 8001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 8001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 9001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 9001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ]
+      [32m+[0m[0m name                   = "sameregi6865-raft-quic-node4"
+      [32m+[0m[0m name_prefix            = (known after apply)
+      [32m+[0m[0m owner_id               = (known after apply)
+      [32m+[0m[0m revoke_rules_on_delete = false
+      [32m+[0m[0m tags                   = {
+          [32m+[0m[0m "Node"    = "node4"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all               = {
+          [32m+[0m[0m "Node"    = "node4"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m vpc_id                 = (known after apply)
+    }
+
+[1m  # module.node[4].aws_iam_instance_profile.raft_ssm[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_instance_profile" "raft_ssm" {
+      [32m+[0m[0m arn         = (known after apply)
+      [32m+[0m[0m create_date = (known after apply)
+      [32m+[0m[0m id          = (known after apply)
+      [32m+[0m[0m name        = "sameregi6865-raft-quic-same-ssm-node5"
+      [32m+[0m[0m name_prefix = (known after apply)
+      [32m+[0m[0m path        = "/"
+      [32m+[0m[0m role        = "sameregi6865-raft-quic-same-ssm-node5"
+      [32m+[0m[0m tags_all    = (known after apply)
+      [32m+[0m[0m unique_id   = (known after apply)
+    }
+
+[1m  # module.node[4].aws_iam_role.raft_ssm[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role" "raft_ssm" {
+      [32m+[0m[0m arn                   = (known after apply)
+      [32m+[0m[0m assume_role_policy    = jsonencode(
+            {
+              [32m+[0m[0m Statement = [
+                  [32m+[0m[0m {
+                      [32m+[0m[0m Action    = "sts:AssumeRole"
+                      [32m+[0m[0m Effect    = "Allow"
+                      [32m+[0m[0m Principal = {
+                          [32m+[0m[0m Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              [32m+[0m[0m Version   = "2012-10-17"
+            }
+        )
+      [32m+[0m[0m create_date           = (known after apply)
+      [32m+[0m[0m force_detach_policies = false
+      [32m+[0m[0m id                    = (known after apply)
+      [32m+[0m[0m managed_policy_arns   = (known after apply)
+      [32m+[0m[0m max_session_duration  = 3600
+      [32m+[0m[0m name                  = "sameregi6865-raft-quic-same-ssm-node5"
+      [32m+[0m[0m name_prefix           = (known after apply)
+      [32m+[0m[0m path                  = "/"
+      [32m+[0m[0m tags                  = {
+          [32m+[0m[0m "Node"    = "node5"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all              = {
+          [32m+[0m[0m "Node"    = "node5"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m unique_id             = (known after apply)
+
+      [32m+[0m[0m inline_policy (known after apply)
+    }
+
+[1m  # module.node[4].aws_iam_role_policy_attachment.ssm_core[0m will be created
+[0m  [32m+[0m[0m resource "aws_iam_role_policy_attachment" "ssm_core" {
+      [32m+[0m[0m id         = (known after apply)
+      [32m+[0m[0m policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      [32m+[0m[0m role       = "sameregi6865-raft-quic-same-ssm-node5"
+    }
+
+[1m  # module.node[4].aws_instance.node[0m will be created
+[0m  [32m+[0m[0m resource "aws_instance" "node" {
+      [32m+[0m[0m ami                                  = "ami-0102a36b3e9d5e4df"
+      [32m+[0m[0m arn                                  = (known after apply)
+      [32m+[0m[0m associate_public_ip_address          = true
+      [32m+[0m[0m availability_zone                    = (known after apply)
+      [32m+[0m[0m cpu_core_count                       = (known after apply)
+      [32m+[0m[0m cpu_threads_per_core                 = (known after apply)
+      [32m+[0m[0m disable_api_stop                     = (known after apply)
+      [32m+[0m[0m disable_api_termination              = (known after apply)
+      [32m+[0m[0m ebs_optimized                        = (known after apply)
+      [32m+[0m[0m enable_primary_ipv6                  = (known after apply)
+      [32m+[0m[0m get_password_data                    = false
+      [32m+[0m[0m host_id                              = (known after apply)
+      [32m+[0m[0m host_resource_group_arn              = (known after apply)
+      [32m+[0m[0m iam_instance_profile                 = "sameregi6865-raft-quic-same-ssm-node5"
+      [32m+[0m[0m id                                   = (known after apply)
+      [32m+[0m[0m instance_initiated_shutdown_behavior = (known after apply)
+      [32m+[0m[0m instance_lifecycle                   = (known after apply)
+      [32m+[0m[0m instance_state                       = (known after apply)
+      [32m+[0m[0m instance_type                        = "t3.micro"
+      [32m+[0m[0m ipv6_address_count                   = (known after apply)
+      [32m+[0m[0m ipv6_addresses                       = (known after apply)
+      [32m+[0m[0m key_name                             = "sameregi6865-raft-quic-same-node5"
+      [32m+[0m[0m monitoring                           = (known after apply)
+      [32m+[0m[0m outpost_arn                          = (known after apply)
+      [32m+[0m[0m password_data                        = (known after apply)
+      [32m+[0m[0m placement_group                      = (known after apply)
+      [32m+[0m[0m placement_partition_number           = (known after apply)
+      [32m+[0m[0m primary_network_interface_id         = (known after apply)
+      [32m+[0m[0m private_dns                          = (known after apply)
+      [32m+[0m[0m private_ip                           = (known after apply)
+      [32m+[0m[0m public_dns                           = (known after apply)
+      [32m+[0m[0m public_ip                            = (known after apply)
+      [32m+[0m[0m secondary_private_ips                = (known after apply)
+      [32m+[0m[0m security_groups                      = (known after apply)
+      [32m+[0m[0m source_dest_check                    = true
+      [32m+[0m[0m spot_instance_request_id             = (known after apply)
+      [32m+[0m[0m subnet_id                            = (known after apply)
+      [32m+[0m[0m tags                                 = {
+          [32m+[0m[0m "Name"    = "sameregi6865-raft-quic-node5"
+          [32m+[0m[0m "Node"    = "node5"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all                             = {
+          [32m+[0m[0m "Name"    = "sameregi6865-raft-quic-node5"
+          [32m+[0m[0m "Node"    = "node5"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tenancy                              = (known after apply)
+      [32m+[0m[0m user_data                            = (known after apply)
+      [32m+[0m[0m user_data_base64                     = (known after apply)
+      [32m+[0m[0m user_data_replace_on_change          = false
+      [32m+[0m[0m vpc_security_group_ids               = (known after apply)
+
+      [32m+[0m[0m capacity_reservation_specification (known after apply)
+
+      [32m+[0m[0m cpu_options (known after apply)
+
+      [32m+[0m[0m ebs_block_device (known after apply)
+
+      [32m+[0m[0m enclave_options (known after apply)
+
+      [32m+[0m[0m ephemeral_block_device (known after apply)
+
+      [32m+[0m[0m instance_market_options (known after apply)
+
+      [32m+[0m[0m maintenance_options (known after apply)
+
+      [32m+[0m[0m metadata_options (known after apply)
+
+      [32m+[0m[0m network_interface (known after apply)
+
+      [32m+[0m[0m private_dns_name_options (known after apply)
+
+      [32m+[0m[0m root_block_device (known after apply)
+    }
+
+[1m  # module.node[4].aws_key_pair.raft[0m will be created
+[0m  [32m+[0m[0m resource "aws_key_pair" "raft" {
+      [32m+[0m[0m arn             = (known after apply)
+      [32m+[0m[0m fingerprint     = (known after apply)
+      [32m+[0m[0m id              = (known after apply)
+      [32m+[0m[0m key_name        = "sameregi6865-raft-quic-same-node5"
+      [32m+[0m[0m key_name_prefix = (known after apply)
+      [32m+[0m[0m key_pair_id     = (known after apply)
+      [32m+[0m[0m key_type        = (known after apply)
+      [32m+[0m[0m public_key      = (known after apply)
+      [32m+[0m[0m tags            = {
+          [32m+[0m[0m "Node"    = "node5"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all        = {
+          [32m+[0m[0m "Node"    = "node5"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+    }
+
+[1m  # module.node[4].aws_security_group.raft[0m will be created
+[0m  [32m+[0m[0m resource "aws_security_group" "raft" {
+      [32m+[0m[0m arn                    = (known after apply)
+      [32m+[0m[0m description            = "Raft-over-QUIC cluster node node5"
+      [32m+[0m[0m egress                 = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 0
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "-1"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 0
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ]
+      [32m+[0m[0m id                     = (known after apply)
+      [32m+[0m[0m ingress                = [
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 22
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 22
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 7001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "udp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 7001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 8001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 8001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [32m+[0m[0m {
+              [32m+[0m[0m cidr_blocks      = [
+                  [32m+[0m[0m "0.0.0.0/0",
+                ]
+              [32m+[0m[0m from_port        = 9001
+              [32m+[0m[0m ipv6_cidr_blocks = []
+              [32m+[0m[0m prefix_list_ids  = []
+              [32m+[0m[0m protocol         = "tcp"
+              [32m+[0m[0m security_groups  = []
+              [32m+[0m[0m self             = false
+              [32m+[0m[0m to_port          = 9001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ]
+      [32m+[0m[0m name                   = "sameregi6865-raft-quic-node5"
+      [32m+[0m[0m name_prefix            = (known after apply)
+      [32m+[0m[0m owner_id               = (known after apply)
+      [32m+[0m[0m revoke_rules_on_delete = false
+      [32m+[0m[0m tags                   = {
+          [32m+[0m[0m "Node"    = "node5"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m tags_all               = {
+          [32m+[0m[0m "Node"    = "node5"
+          [32m+[0m[0m "Project" = "raft-quic"
+        }
+      [32m+[0m[0m vpc_id                 = (known after apply)
+    }
+
+[1mPlan:[0m [0m32 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  [32m+[0m[0m instance_ids  = [
+      [32m+[0m[0m (known after apply),
+      [32m+[0m[0m (known after apply),
+      [32m+[0m[0m (known after apply),
+      [32m+[0m[0m (known after apply),
+      [32m+[0m[0m (known after apply),
+    ]
+  [32m+[0m[0m node_ids      = [
+      [32m+[0m[0m "node1",
+      [32m+[0m[0m "node2",
+      [32m+[0m[0m "node3",
+      [32m+[0m[0m "node4",
+      [32m+[0m[0m "node5",
+    ]
+  [32m+[0m[0m node_ips      = [
+      [32m+[0m[0m (known after apply),
+      [32m+[0m[0m (known after apply),
+      [32m+[0m[0m (known after apply),
+      [32m+[0m[0m (known after apply),
+      [32m+[0m[0m (known after apply),
+    ]
+  [32m+[0m[0m region_labels = [
+      [32m+[0m[0m "us-east-1",
+      [32m+[0m[0m "us-east-1",
+      [32m+[0m[0m "us-east-1",
+      [32m+[0m[0m "us-east-1",
+      [32m+[0m[0m "us-east-1",
+    ]
+  [32m+[0m[0m scenario      = "same-region"
+  [32m+[0m[0m ssh_key_file  = "./raft-key.pem"
+  [32m+[0m[0m ssh_user      = "ec2-user"
+[0m[1mtls_private_key.ssh: Creating...[0m[0m
+[0m[1mmodule.node[2].aws_iam_role.raft_ssm: Creating...[0m[0m
+[0m[1mmodule.node[3].aws_iam_role.raft_ssm: Creating...[0m[0m
+[0m[1mmodule.node[4].aws_iam_role.raft_ssm: Creating...[0m[0m
+[0m[1mmodule.node[0].aws_iam_role.raft_ssm: Creating...[0m[0m
+[0m[1mmodule.node[2].aws_security_group.raft: Creating...[0m[0m
+[0m[1mmodule.node[0].aws_security_group.raft: Creating...[0m[0m
+[0m[1mmodule.node[4].aws_security_group.raft: Creating...[0m[0m
+[0m[1mmodule.node[3].aws_security_group.raft: Creating...[0m[0m
+[0m[1mmodule.node[1].aws_security_group.raft: Creating...[0m[0m
+[0m[1mtls_private_key.ssh: Creation complete after 1s [id=0b03073e5837a8e0d7873475844cf82da973a42a][0m
+[0m[1mmodule.node[1].aws_iam_role.raft_ssm: Creating...[0m[0m
+[0m[1mmodule.node[2].aws_iam_role.raft_ssm: Creation complete after 2s [id=sameregi6865-raft-quic-same-ssm-node3][0m
+[0m[1mlocal_sensitive_file.ssh_key: Creating...[0m[0m
+[0m[1mmodule.node[4].aws_iam_role.raft_ssm: Creation complete after 2s [id=sameregi6865-raft-quic-same-ssm-node5][0m
+[0m[1mlocal_sensitive_file.ssh_key: Creation complete after 0s [id=7d7d5ea56d71e1e7e990f4736c98087e3dffd019][0m
+[0m[1mmodule.node[3].aws_iam_role.raft_ssm: Creation complete after 2s [id=sameregi6865-raft-quic-same-ssm-node4][0m
+[0m[1mmodule.node[3].aws_key_pair.raft: Creating...[0m[0m
+[0m[1mmodule.node[2].aws_key_pair.raft: Creating...[0m[0m
+[0m[1mmodule.node[0].aws_iam_role.raft_ssm: Creation complete after 2s [id=sameregi6865-raft-quic-same-ssm-node1][0m
+[0m[1mmodule.node[0].aws_key_pair.raft: Creating...[0m[0m
+[0m[1mmodule.node[4].aws_key_pair.raft: Creating...[0m[0m
+[0m[1mmodule.node[1].aws_iam_role.raft_ssm: Creation complete after 2s [id=sameregi6865-raft-quic-same-ssm-node2][0m
+[0m[1mmodule.node[1].aws_key_pair.raft: Creating...[0m[0m
+[0m[1mmodule.node[3].aws_key_pair.raft: Creation complete after 1s [id=sameregi6865-raft-quic-same-node4][0m
+[0m[1mmodule.node[4].aws_iam_role_policy_attachment.ssm_core: Creating...[0m[0m
+[0m[1mmodule.node[2].aws_key_pair.raft: Creation complete after 1s [id=sameregi6865-raft-quic-same-node3][0m
+[0m[1mmodule.node[0].aws_iam_role_policy_attachment.ssm_core: Creating...[0m[0m
+[0m[1mmodule.node[0].aws_key_pair.raft: Creation complete after 1s [id=sameregi6865-raft-quic-same-node1][0m
+[0m[1mmodule.node[3].aws_iam_role_policy_attachment.ssm_core: Creating...[0m[0m
+[0m[1mmodule.node[4].aws_key_pair.raft: Creation complete after 1s [id=sameregi6865-raft-quic-same-node5][0m
+[0m[1mmodule.node[2].aws_iam_role_policy_attachment.ssm_core: Creating...[0m[0m
+[0m[1mmodule.node[1].aws_key_pair.raft: Creation complete after 1s [id=sameregi6865-raft-quic-same-node2][0m
+[0m[1mmodule.node[1].aws_iam_role_policy_attachment.ssm_core: Creating...[0m[0m
+[0m[1mmodule.node[4].aws_iam_role_policy_attachment.ssm_core: Creation complete after 1s [id=sameregi6865-raft-quic-same-ssm-node5-20260420174827538000000001][0m
+[0m[1mmodule.node[2].aws_iam_instance_profile.raft_ssm: Creating...[0m[0m
+[0m[1mmodule.node[0].aws_iam_role_policy_attachment.ssm_core: Creation complete after 1s [id=sameregi6865-raft-quic-same-ssm-node1-20260420174827577400000002][0m
+[0m[1mmodule.node[1].aws_iam_instance_profile.raft_ssm: Creating...[0m[0m
+[0m[1mmodule.node[3].aws_iam_role_policy_attachment.ssm_core: Creation complete after 1s [id=sameregi6865-raft-quic-same-ssm-node4-20260420174827613500000003][0m
+[0m[1mmodule.node[4].aws_iam_instance_profile.raft_ssm: Creating...[0m[0m
+[0m[1mmodule.node[2].aws_iam_role_policy_attachment.ssm_core: Creation complete after 1s [id=sameregi6865-raft-quic-same-ssm-node3-20260420174827655700000004][0m
+[0m[1mmodule.node[3].aws_iam_instance_profile.raft_ssm: Creating...[0m[0m
+[0m[1mmodule.node[1].aws_iam_role_policy_attachment.ssm_core: Creation complete after 1s [id=sameregi6865-raft-quic-same-ssm-node2-20260420174827751300000005][0m
+[0m[1mmodule.node[0].aws_iam_instance_profile.raft_ssm: Creating...[0m[0m
+[0m[1mmodule.node[1].aws_security_group.raft: Creation complete after 6s [id=sg-0d023f6d529cccd93][0m
+[0m[1mmodule.node[2].aws_security_group.raft: Creation complete after 6s [id=sg-0ce5c5c8f4f18824c][0m
+[0m[1mmodule.node[0].aws_security_group.raft: Creation complete after 6s [id=sg-0b45d6133379b8dff][0m
+[0m[1mmodule.node[4].aws_security_group.raft: Creation complete after 6s [id=sg-0594e4986f8fc212f][0m
+[0m[1mmodule.node[3].aws_security_group.raft: Creation complete after 6s [id=sg-06056527f590e1f00][0m
+[0m[1mmodule.node[1].aws_iam_instance_profile.raft_ssm: Creation complete after 7s [id=sameregi6865-raft-quic-same-ssm-node2][0m
+[0m[1mmodule.node[2].aws_iam_instance_profile.raft_ssm: Creation complete after 7s [id=sameregi6865-raft-quic-same-ssm-node3][0m
+[0m[1mmodule.node[4].aws_iam_instance_profile.raft_ssm: Creation complete after 7s [id=sameregi6865-raft-quic-same-ssm-node5][0m
+[0m[1mmodule.node[3].aws_iam_instance_profile.raft_ssm: Creation complete after 7s [id=sameregi6865-raft-quic-same-ssm-node4][0m
+[0m[1mmodule.node[0].aws_iam_instance_profile.raft_ssm: Creation complete after 7s [id=sameregi6865-raft-quic-same-ssm-node1][0m
+[0m[1mmodule.node[3].aws_instance.node: Creating...[0m[0m
+[0m[1mmodule.node[4].aws_instance.node: Creating...[0m[0m
+[0m[1mmodule.node[1].aws_instance.node: Creating...[0m[0m
+[0m[1mmodule.node[2].aws_instance.node: Creating...[0m[0m
+[0m[1mmodule.node[0].aws_instance.node: Creating...[0m[0m
+[0m[1mmodule.node[2].aws_instance.node: Still creating... [00m10s elapsed][0m[0m
+[0m[1mmodule.node[3].aws_instance.node: Still creating... [00m10s elapsed][0m[0m
+[0m[1mmodule.node[4].aws_instance.node: Still creating... [00m10s elapsed][0m[0m
+[0m[1mmodule.node[0].aws_instance.node: Still creating... [00m10s elapsed][0m[0m
+[0m[1mmodule.node[1].aws_instance.node: Still creating... [00m10s elapsed][0m[0m
+[0m[1mmodule.node[3].aws_instance.node: Creation complete after 15s [id=i-07ae9edd0e64a7e75][0m
+[0m[1mmodule.node[1].aws_instance.node: Creation complete after 19s [id=i-0acd86d14485cae31][0m
+[0m[1mmodule.node[4].aws_instance.node: Creation complete after 19s [id=i-026ba331ba0c69ca4][0m
+[0m[1mmodule.node[0].aws_instance.node: Still creating... [00m20s elapsed][0m[0m
+[0m[1mmodule.node[2].aws_instance.node: Still creating... [00m20s elapsed][0m[0m
+[0m[1mmodule.node[2].aws_instance.node: Creation complete after 20s [id=i-0dc7c548036432aa6][0m
+[0m[1mmodule.node[0].aws_instance.node: Creation complete after 20s [id=i-0953b6d13b6835f2e][0m
+[0m[1m[32m
+Apply complete! Resources: 32 added, 0 changed, 0 destroyed.[0m
+[0m[1m[32m
+Outputs:
+
+[0minstance_ids = [
+  "i-0953b6d13b6835f2e",
+  "i-0acd86d14485cae31",
+  "i-0dc7c548036432aa6",
+  "i-07ae9edd0e64a7e75",
+  "i-026ba331ba0c69ca4",
+]
+node_ids = [
+  "node1",
+  "node2",
+  "node3",
+  "node4",
+  "node5",
+]
+node_ips = [
+  "100.30.199.11",
+  "54.242.97.192",
+  "54.84.81.14",
+  "32.192.93.252",
+  "54.198.130.65",
+]
+region_labels = [
+  "us-east-1",
+  "us-east-1",
+  "us-east-1",
+  "us-east-1",
+  "us-east-1",
+]
+scenario = "same-region"
+ssh_key_file = "./raft-key.pem"
+ssh_user = "ec2-user"
+[+] 集群配置已保存: /Users/richard/code/raft-quic/deploy/cluster-same-region-5.env
+[*] 上传二进制到 S3（供 SSM 拉取）...
+/Users/richard/code/raft-quic/scripts/distributed_benchmark.py:243: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  suffix = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{os.getpid()}-{self.scenario}-{self.cluster_size}"
+Completed 1.0 MiB/13.2 MiB (905.3 KiB/s) with 1 file(s) remainingCompleted 2.0 MiB/13.2 MiB (1.1 MiB/s) with 1 file(s) remaining  Completed 3.0 MiB/13.2 MiB (1.7 MiB/s) with 1 file(s) remaining  Completed 4.0 MiB/13.2 MiB (2.2 MiB/s) with 1 file(s) remaining  Completed 5.0 MiB/13.2 MiB (2.7 MiB/s) with 1 file(s) remaining  Completed 6.0 MiB/13.2 MiB (3.0 MiB/s) with 1 file(s) remaining  Completed 7.0 MiB/13.2 MiB (3.4 MiB/s) with 1 file(s) remaining  Completed 8.0 MiB/13.2 MiB (3.9 MiB/s) with 1 file(s) remaining  Completed 9.0 MiB/13.2 MiB (4.3 MiB/s) with 1 file(s) remaining  Completed 10.0 MiB/13.2 MiB (4.7 MiB/s) with 1 file(s) remaining Completed 11.0 MiB/13.2 MiB (5.1 MiB/s) with 1 file(s) remaining Completed 12.0 MiB/13.2 MiB (5.5 MiB/s) with 1 file(s) remaining Completed 13.0 MiB/13.2 MiB (5.9 MiB/s) with 1 file(s) remaining Completed 13.2 MiB/13.2 MiB (4.3 MiB/s) with 1 file(s) remaining upload: ./raftd-linux-amd64 to s3://raft-quic-artifacts-560449670342-us-east-1/distributed-benchmark/20260420174859-63328-same-region-5/raftd-linux-amd64
+Completed 1.0 MiB/7.8 MiB (1.1 MiB/s) with 1 file(s) remainingCompleted 2.0 MiB/7.8 MiB (1.6 MiB/s) with 1 file(s) remainingCompleted 3.0 MiB/7.8 MiB (2.4 MiB/s) with 1 file(s) remainingCompleted 4.0 MiB/7.8 MiB (3.0 MiB/s) with 1 file(s) remainingCompleted 5.0 MiB/7.8 MiB (3.8 MiB/s) with 1 file(s) remainingCompleted 6.0 MiB/7.8 MiB (4.5 MiB/s) with 1 file(s) remainingCompleted 7.0 MiB/7.8 MiB (5.1 MiB/s) with 1 file(s) remainingCompleted 7.8 MiB/7.8 MiB (5.5 MiB/s) with 1 file(s) remainingupload: cmd/tcp-server/tcp-server-linux-amd64 to s3://raft-quic-artifacts-560449670342-us-east-1/distributed-benchmark/20260420174859-63328-same-region-5/tcp-server-linux-amd64
+[+] 二进制已上传并生成预签名下载链接
+[*] 等待 SSM 就绪: node1 (i-0953b6d13b6835f2e, us-east-1)
+[+] SSM 就绪: node1
+[*] 等待 SSM 就绪: node2 (i-0acd86d14485cae31, us-east-1)
+[+] SSM 就绪: node2
+[*] 等待 SSM 就绪: node3 (i-0dc7c548036432aa6, us-east-1)
+[+] SSM 就绪: node3
+[*] 等待 SSM 就绪: node4 (i-07ae9edd0e64a7e75, us-east-1)
+[+] SSM 就绪: node4
+[*] 等待 SSM 就绪: node5 (i-026ba331ba0c69ca4, us-east-1)
+[+] SSM 就绪: node5
+[*] 通过 SSM 启动 bootstrap 节点: node1
+[*] 通过 SSM 启动 follower 节点: node2
+[*] 通过 SSM 启动 follower 节点: node3
+[*] 通过 SSM 启动 follower 节点: node4
+[*] 通过 SSM 启动 follower 节点: node5
+[*] 等待 QUIC/TCP 集群状态稳定...
+delete: s3://raft-quic-artifacts-560449670342-us-east-1/distributed-benchmark/20260420174859-63328-same-region-5/raftd-linux-amd64
+delete: s3://raft-quic-artifacts-560449670342-us-east-1/distributed-benchmark/20260420174859-63328-same-region-5/tcp-server-linux-amd64
+[!] 测试失败: 集群未在超时内就绪
+[*] 销毁 5 节点 same-region 集群...
+[0m[1mtls_private_key.ssh: Refreshing state... [id=0b03073e5837a8e0d7873475844cf82da973a42a][0m
+[0m[1mlocal_sensitive_file.ssh_key: Refreshing state... [id=7d7d5ea56d71e1e7e990f4736c98087e3dffd019][0m
+[0m[1mmodule.node[4].data.aws_iam_policy_document.ec2_assume_role: Reading...[0m[0m
+[0m[1mmodule.node[3].data.aws_ami.al2023: Reading...[0m[0m
+[0m[1mmodule.node[2].data.aws_iam_policy_document.ec2_assume_role: Reading...[0m[0m
+[0m[1mmodule.node[0].data.aws_ami.al2023: Reading...[0m[0m
+[0m[1mmodule.node[1].data.aws_iam_policy_document.ec2_assume_role: Reading...[0m[0m
+[0m[1mmodule.node[0].data.aws_iam_policy_document.ec2_assume_role: Reading...[0m[0m
+[0m[1mmodule.node[3].data.aws_iam_policy_document.ec2_assume_role: Reading...[0m[0m
+[0m[1mmodule.node[0].aws_security_group.raft: Refreshing state... [id=sg-0b45d6133379b8dff][0m
+[0m[1mmodule.node[4].aws_security_group.raft: Refreshing state... [id=sg-0594e4986f8fc212f][0m
+[0m[1mmodule.node[2].data.aws_iam_policy_document.ec2_assume_role: Read complete after 0s [id=2851119427][0m
+[0m[1mmodule.node[1].data.aws_iam_policy_document.ec2_assume_role: Read complete after 0s [id=2851119427][0m
+[0m[1mmodule.node[4].data.aws_iam_policy_document.ec2_assume_role: Read complete after 0s [id=2851119427][0m
+[0m[1mmodule.node[0].data.aws_iam_policy_document.ec2_assume_role: Read complete after 0s [id=2851119427][0m
+[0m[1mmodule.node[3].data.aws_iam_policy_document.ec2_assume_role: Read complete after 0s [id=2851119427][0m
+[0m[1mmodule.node[3].aws_security_group.raft: Refreshing state... [id=sg-06056527f590e1f00][0m
+[0m[1mmodule.node[4].data.aws_ami.al2023: Reading...[0m[0m
+[0m[1mmodule.node[2].data.aws_ami.al2023: Reading...[0m[0m
+[0m[1mmodule.node[1].data.aws_ami.al2023: Reading...[0m[0m
+[0m[1mmodule.node[1].aws_security_group.raft: Refreshing state... [id=sg-0d023f6d529cccd93][0m
+[0m[1mmodule.node[2].aws_security_group.raft: Refreshing state... [id=sg-0ce5c5c8f4f18824c][0m
+[0m[1mmodule.node[0].aws_key_pair.raft: Refreshing state... [id=sameregi6865-raft-quic-same-node1][0m
+[0m[1mmodule.node[2].aws_key_pair.raft: Refreshing state... [id=sameregi6865-raft-quic-same-node3][0m
+[0m[1mmodule.node[3].aws_key_pair.raft: Refreshing state... [id=sameregi6865-raft-quic-same-node4][0m
+[0m[1mmodule.node[1].aws_key_pair.raft: Refreshing state... [id=sameregi6865-raft-quic-same-node2][0m
+[0m[1mmodule.node[4].aws_key_pair.raft: Refreshing state... [id=sameregi6865-raft-quic-same-node5][0m
+[0m[1mmodule.node[3].aws_iam_role.raft_ssm: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node4][0m
+[0m[1mmodule.node[4].aws_iam_role.raft_ssm: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node5][0m
+[0m[1mmodule.node[0].aws_iam_role.raft_ssm: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node1][0m
+[0m[1mmodule.node[1].aws_iam_role.raft_ssm: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node2][0m
+[0m[1mmodule.node[2].aws_iam_role.raft_ssm: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node3][0m
+[0m[1mmodule.node[3].data.aws_ami.al2023: Read complete after 2s [id=ami-0102a36b3e9d5e4df][0m
+[0m[1mmodule.node[2].data.aws_ami.al2023: Read complete after 2s [id=ami-0102a36b3e9d5e4df][0m
+[0m[1mmodule.node[0].data.aws_ami.al2023: Read complete after 2s [id=ami-0102a36b3e9d5e4df][0m
+[0m[1mmodule.node[1].data.aws_ami.al2023: Read complete after 2s [id=ami-0102a36b3e9d5e4df][0m
+[0m[1mmodule.node[4].data.aws_ami.al2023: Read complete after 2s [id=ami-0102a36b3e9d5e4df][0m
+[0m[1mmodule.node[0].aws_iam_role_policy_attachment.ssm_core: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node1-20260420174827577400000002][0m
+[0m[1mmodule.node[2].aws_iam_role_policy_attachment.ssm_core: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node3-20260420174827655700000004][0m
+[0m[1mmodule.node[4].aws_iam_instance_profile.raft_ssm: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node5][0m
+[0m[1mmodule.node[1].aws_iam_role_policy_attachment.ssm_core: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node2-20260420174827751300000005][0m
+[0m[1mmodule.node[3].aws_iam_instance_profile.raft_ssm: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node4][0m
+[0m[1mmodule.node[4].aws_iam_role_policy_attachment.ssm_core: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node5-20260420174827538000000001][0m
+[0m[1mmodule.node[3].aws_iam_role_policy_attachment.ssm_core: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node4-20260420174827613500000003][0m
+[0m[1mmodule.node[2].aws_iam_instance_profile.raft_ssm: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node3][0m
+[0m[1mmodule.node[0].aws_iam_instance_profile.raft_ssm: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node1][0m
+[0m[1mmodule.node[1].aws_iam_instance_profile.raft_ssm: Refreshing state... [id=sameregi6865-raft-quic-same-ssm-node2][0m
+[0m[1mmodule.node[0].aws_instance.node: Refreshing state... [id=i-0953b6d13b6835f2e][0m
+[0m[1mmodule.node[3].aws_instance.node: Refreshing state... [id=i-07ae9edd0e64a7e75][0m
+[0m[1mmodule.node[4].aws_instance.node: Refreshing state... [id=i-026ba331ba0c69ca4][0m
+[0m[1mmodule.node[2].aws_instance.node: Refreshing state... [id=i-0dc7c548036432aa6][0m
+[0m[1mmodule.node[1].aws_instance.node: Refreshing state... [id=i-0acd86d14485cae31][0m
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  [31m-[0m destroy[0m
+
+Terraform will perform the following actions:
+
+[1m  # local_sensitive_file.ssh_key[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "local_sensitive_file" "ssh_key" {
+      [31m-[0m[0m content              = (sensitive value) [90m-> null[0m[0m
+      [31m-[0m[0m content_base64sha256 = "pCct9vWYBqno1AP+z8QOypHX1NW100kzlPPipU6Yv64=" [90m-> null[0m[0m
+      [31m-[0m[0m content_base64sha512 = "zb4aot6vLRf/iuZaNRd9olp46qCGIRa1WidawxHl49WAKEbhhGKRFT8GanuY+xhJyRhBVrZFpfbWl/eLgSXELQ==" [90m-> null[0m[0m
+      [31m-[0m[0m content_md5          = "9961a9d27363e2d960a7780784f8dc65" [90m-> null[0m[0m
+      [31m-[0m[0m content_sha1         = "7d7d5ea56d71e1e7e990f4736c98087e3dffd019" [90m-> null[0m[0m
+      [31m-[0m[0m content_sha256       = "a4272df6f59806a9e8d403fecfc40eca91d7d4d5b5d3493394f3e2a54e98bfae" [90m-> null[0m[0m
+      [31m-[0m[0m content_sha512       = "cdbe1aa2deaf2d17ff8ae65a35177da25a78eaa0862116b55a275ac311e5e3d5802846e1846291153f066a7b98fb1849c9184156b645a5f6d697f78b8125c42d" [90m-> null[0m[0m
+      [31m-[0m[0m directory_permission = "0700" [90m-> null[0m[0m
+      [31m-[0m[0m file_permission      = "0600" [90m-> null[0m[0m
+      [31m-[0m[0m filename             = "./raft-key.pem" [90m-> null[0m[0m
+      [31m-[0m[0m id                   = "7d7d5ea56d71e1e7e990f4736c98087e3dffd019" [90m-> null[0m[0m
+    }
+
+[1m  # tls_private_key.ssh[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "tls_private_key" "ssh" {
+      [31m-[0m[0m algorithm                     = "RSA" [90m-> null[0m[0m
+      [31m-[0m[0m ecdsa_curve                   = "P224" [90m-> null[0m[0m
+      [31m-[0m[0m id                            = "0b03073e5837a8e0d7873475844cf82da973a42a" [90m-> null[0m[0m
+      [31m-[0m[0m private_key_openssh           = (sensitive value) [90m-> null[0m[0m
+      [31m-[0m[0m private_key_pem               = (sensitive value) [90m-> null[0m[0m
+      [31m-[0m[0m private_key_pem_pkcs8         = (sensitive value) [90m-> null[0m[0m
+      [31m-[0m[0m public_key_fingerprint_md5    = "fd:96:33:90:73:de:3d:f1:57:0a:b5:de:df:a3:47:0a" [90m-> null[0m[0m
+      [31m-[0m[0m public_key_fingerprint_sha256 = "SHA256:2UZuxGFy9TFn0/cNsmy+d+3mROBZ/j77DFCFaZVuZKU" [90m-> null[0m[0m
+      [31m-[0m[0m public_key_openssh            = <<-EOT
+            ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDA0JdizYJBp/CWaQoxZfW0nheVvHGNTCDqYxdnQdOe3U3KZzIuvXtnx/wTyun9CKCfdfWThXoAoieOOnjVMIPVxvq6MhRLctdoqJD9YAIxHUuMuHjEbXb0Y1ssdYg+h4u4Vc/mfc4fcmSNr5tJnMZs62P5t14qOhu1ufOMmEdlx71+CEi2Fzlo/GH/JeLRpOHSJu2NjxdLSRS5ErmvtCi/VLlvifJlgii5IjNkTxg2Zv8FZ4IAKzy3BRb1DDRRLGoVxxhIjHJxeNe3yWQtj2sNZD1lO61dO009ovOYMImdKx7jFPXl7H5S8hRl3jMTtLft5JIRV46DQw1M36ctKIcrxtbky9uVg2sgFDnKG3tuWWuEGLqhZju/woH4MMo7iTi/oKii9742kQXDnDPXWL3NRjg9arrL+O4fTf2IoQgtAyOVMnKLQ44yCFsa0vnrqO4lOCXu3pnFgLvgd9ouwAvEpRYfTMZilO71WZ2i4+Uk8acZFzxb5rlwhEckwUAt5nAqoZnD9n6tklLwq7PAHdMAJs0VohJcg4TqIXjGai7SazgQcrGgCDPVjVKw+P8sgX2zIVi1cn9Iw21p56/Zfeqn/Ek9+r9zeiNmEjYj/gXwhwQwJeg+C0hm3auEv9qsykrLdPS2Khh1VBR44yhq47bJ/qBc+N7AyJxZleWcI9fObQ==
+        EOT [90m-> null[0m[0m
+      [31m-[0m[0m public_key_pem                = <<-EOT
+            -----BEGIN PUBLIC KEY-----
+            MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAwNCXYs2CQafwlmkKMWX1
+            tJ4XlbxxjUwg6mMXZ0HTnt1NymcyLr17Z8f8E8rp/Qign3X1k4V6AKInjjp41TCD
+            1cb6ujIUS3LXaKiQ/WACMR1LjLh4xG129GNbLHWIPoeLuFXP5n3OH3Jkja+bSZzG
+            bOtj+bdeKjobtbnzjJhHZce9fghIthc5aPxh/yXi0aTh0ibtjY8XS0kUuRK5r7Qo
+            v1S5b4nyZYIouSIzZE8YNmb/BWeCACs8twUW9Qw0USxqFccYSIxycXjXt8lkLY9r
+            DWQ9ZTutXTtNPaLzmDCJnSse4xT15ex+UvIUZd4zE7S37eSSEVeOg0MNTN+nLSiH
+            K8bW5MvblYNrIBQ5yht7bllrhBi6oWY7v8KB+DDKO4k4v6Coove+NpEFw5wz11i9
+            zUY4PWq6y/juH039iKEILQMjlTJyi0OOMghbGtL566juJTgl7t6ZxYC74HfaLsAL
+            xKUWH0zGYpTu9VmdouPlJPGnGRc8W+a5cIRHJMFALeZwKqGZw/Z+rZJS8KuzwB3T
+            ACbNFaISXIOE6iF4xmou0ms4EHKxoAgz1Y1SsPj/LIF9syFYtXJ/SMNtaeev2X3q
+            p/xJPfq/c3ojZhI2I/4F8IcEMCXoPgtIZt2rhL/arMpKy3T0tioYdVQUeOMoauO2
+            yf6gXPjewMicWZXlnCPXzm0CAwEAAQ==
+            -----END PUBLIC KEY-----
+        EOT [90m-> null[0m[0m
+      [31m-[0m[0m rsa_bits                      = 4096 [90m-> null[0m[0m
+    }
+
+[1m  # module.node[0].aws_iam_instance_profile.raft_ssm[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_instance_profile" "raft_ssm" {
+      [31m-[0m[0m arn         = "arn:aws:iam::560449670342:instance-profile/sameregi6865-raft-quic-same-ssm-node1" [90m-> null[0m[0m
+      [31m-[0m[0m create_date = "2026-04-20T17:48:28Z" [90m-> null[0m[0m
+      [31m-[0m[0m id          = "sameregi6865-raft-quic-same-ssm-node1" [90m-> null[0m[0m
+      [31m-[0m[0m name        = "sameregi6865-raft-quic-same-ssm-node1" [90m-> null[0m[0m
+      [31m-[0m[0m path        = "/" [90m-> null[0m[0m
+      [31m-[0m[0m role        = "sameregi6865-raft-quic-same-ssm-node1" [90m-> null[0m[0m
+      [31m-[0m[0m tags        = {} [90m-> null[0m[0m
+      [31m-[0m[0m tags_all    = {} [90m-> null[0m[0m
+      [31m-[0m[0m unique_id   = "AIPAYE7LHJTDL65ASNLWJ" [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[0].aws_iam_role.raft_ssm[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_role" "raft_ssm" {
+      [31m-[0m[0m arn                   = "arn:aws:iam::560449670342:role/sameregi6865-raft-quic-same-ssm-node1" [90m-> null[0m[0m
+      [31m-[0m[0m assume_role_policy    = jsonencode(
+            {
+              [31m-[0m[0m Statement = [
+                  [31m-[0m[0m {
+                      [31m-[0m[0m Action    = "sts:AssumeRole"
+                      [31m-[0m[0m Effect    = "Allow"
+                      [31m-[0m[0m Principal = {
+                          [31m-[0m[0m Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              [31m-[0m[0m Version   = "2012-10-17"
+            }
+        ) [90m-> null[0m[0m
+      [31m-[0m[0m create_date           = "2026-04-20T17:48:25Z" [90m-> null[0m[0m
+      [31m-[0m[0m force_detach_policies = false [90m-> null[0m[0m
+      [31m-[0m[0m id                    = "sameregi6865-raft-quic-same-ssm-node1" [90m-> null[0m[0m
+      [31m-[0m[0m managed_policy_arns   = [
+          [31m-[0m[0m "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m max_session_duration  = 3600 [90m-> null[0m[0m
+      [31m-[0m[0m name                  = "sameregi6865-raft-quic-same-ssm-node1" [90m-> null[0m[0m
+      [31m-[0m[0m path                  = "/" [90m-> null[0m[0m
+      [31m-[0m[0m tags                  = {
+          [31m-[0m[0m "Node"    = "node1"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all              = {
+          [31m-[0m[0m "Node"    = "node1"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m unique_id             = "AROAYE7LHJTDHPSPZFYCG" [90m-> null[0m[0m
+        [90m# (3 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.node[0].aws_iam_role_policy_attachment.ssm_core[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_role_policy_attachment" "ssm_core" {
+      [31m-[0m[0m id         = "sameregi6865-raft-quic-same-ssm-node1-20260420174827577400000002" [90m-> null[0m[0m
+      [31m-[0m[0m policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" [90m-> null[0m[0m
+      [31m-[0m[0m role       = "sameregi6865-raft-quic-same-ssm-node1" [90m-> null[0m[0m
+    }
+
+[1m  # module.node[0].aws_instance.node[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_instance" "node" {
+      [31m-[0m[0m ami                                  = "ami-0102a36b3e9d5e4df" [90m-> null[0m[0m
+      [31m-[0m[0m arn                                  = "arn:aws:ec2:us-east-1:560449670342:instance/i-0953b6d13b6835f2e" [90m-> null[0m[0m
+      [31m-[0m[0m associate_public_ip_address          = true [90m-> null[0m[0m
+      [31m-[0m[0m availability_zone                    = "us-east-1d" [90m-> null[0m[0m
+      [31m-[0m[0m cpu_core_count                       = 1 [90m-> null[0m[0m
+      [31m-[0m[0m cpu_threads_per_core                 = 2 [90m-> null[0m[0m
+      [31m-[0m[0m disable_api_stop                     = false [90m-> null[0m[0m
+      [31m-[0m[0m disable_api_termination              = false [90m-> null[0m[0m
+      [31m-[0m[0m ebs_optimized                        = false [90m-> null[0m[0m
+      [31m-[0m[0m get_password_data                    = false [90m-> null[0m[0m
+      [31m-[0m[0m hibernation                          = false [90m-> null[0m[0m
+      [31m-[0m[0m iam_instance_profile                 = "sameregi6865-raft-quic-same-ssm-node1" [90m-> null[0m[0m
+      [31m-[0m[0m id                                   = "i-0953b6d13b6835f2e" [90m-> null[0m[0m
+      [31m-[0m[0m instance_initiated_shutdown_behavior = "stop" [90m-> null[0m[0m
+      [31m-[0m[0m instance_state                       = "running" [90m-> null[0m[0m
+      [31m-[0m[0m instance_type                        = "t3.micro" [90m-> null[0m[0m
+      [31m-[0m[0m ipv6_address_count                   = 0 [90m-> null[0m[0m
+      [31m-[0m[0m ipv6_addresses                       = [] [90m-> null[0m[0m
+      [31m-[0m[0m key_name                             = "sameregi6865-raft-quic-same-node1" [90m-> null[0m[0m
+      [31m-[0m[0m monitoring                           = false [90m-> null[0m[0m
+      [31m-[0m[0m placement_partition_number           = 0 [90m-> null[0m[0m
+      [31m-[0m[0m primary_network_interface_id         = "eni-0ff5222bf42d33a76" [90m-> null[0m[0m
+      [31m-[0m[0m private_dns                          = "ip-172-31-35-119.ec2.internal" [90m-> null[0m[0m
+      [31m-[0m[0m private_ip                           = "172.31.35.119" [90m-> null[0m[0m
+      [31m-[0m[0m public_dns                           = "ec2-100-30-199-11.compute-1.amazonaws.com" [90m-> null[0m[0m
+      [31m-[0m[0m public_ip                            = "100.30.199.11" [90m-> null[0m[0m
+      [31m-[0m[0m secondary_private_ips                = [] [90m-> null[0m[0m
+      [31m-[0m[0m security_groups                      = [
+          [31m-[0m[0m "sameregi6865-raft-quic-node1",
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m source_dest_check                    = true [90m-> null[0m[0m
+      [31m-[0m[0m subnet_id                            = "subnet-055764690b8558cd1" [90m-> null[0m[0m
+      [31m-[0m[0m tags                                 = {
+          [31m-[0m[0m "Name"    = "sameregi6865-raft-quic-node1"
+          [31m-[0m[0m "Node"    = "node1"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all                             = {
+          [31m-[0m[0m "Name"    = "sameregi6865-raft-quic-node1"
+          [31m-[0m[0m "Node"    = "node1"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tenancy                              = "default" [90m-> null[0m[0m
+      [31m-[0m[0m user_data_replace_on_change          = false [90m-> null[0m[0m
+      [31m-[0m[0m vpc_security_group_ids               = [
+          [31m-[0m[0m "sg-0b45d6133379b8dff",
+        ] [90m-> null[0m[0m
+        [90m# (6 unchanged attributes hidden)[0m[0m
+
+      [31m-[0m[0m capacity_reservation_specification {
+          [31m-[0m[0m capacity_reservation_preference = "open" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m cpu_options {
+          [31m-[0m[0m core_count       = 1 [90m-> null[0m[0m
+          [31m-[0m[0m threads_per_core = 2 [90m-> null[0m[0m
+            [90m# (1 unchanged attribute hidden)[0m[0m
+        }
+
+      [31m-[0m[0m credit_specification {
+          [31m-[0m[0m cpu_credits = "unlimited" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m enclave_options {
+          [31m-[0m[0m enabled = false [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m maintenance_options {
+          [31m-[0m[0m auto_recovery = "default" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m metadata_options {
+          [31m-[0m[0m http_endpoint               = "enabled" [90m-> null[0m[0m
+          [31m-[0m[0m http_protocol_ipv6          = "disabled" [90m-> null[0m[0m
+          [31m-[0m[0m http_put_response_hop_limit = 2 [90m-> null[0m[0m
+          [31m-[0m[0m http_tokens                 = "required" [90m-> null[0m[0m
+          [31m-[0m[0m instance_metadata_tags      = "disabled" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m private_dns_name_options {
+          [31m-[0m[0m enable_resource_name_dns_a_record    = false [90m-> null[0m[0m
+          [31m-[0m[0m enable_resource_name_dns_aaaa_record = false [90m-> null[0m[0m
+          [31m-[0m[0m hostname_type                        = "ip-name" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m root_block_device {
+          [31m-[0m[0m delete_on_termination = true [90m-> null[0m[0m
+          [31m-[0m[0m device_name           = "/dev/xvda" [90m-> null[0m[0m
+          [31m-[0m[0m encrypted             = false [90m-> null[0m[0m
+          [31m-[0m[0m iops                  = 3000 [90m-> null[0m[0m
+          [31m-[0m[0m tags                  = {} [90m-> null[0m[0m
+          [31m-[0m[0m tags_all              = {} [90m-> null[0m[0m
+          [31m-[0m[0m throughput            = 125 [90m-> null[0m[0m
+          [31m-[0m[0m volume_id             = "vol-0dd6121e88afffb6d" [90m-> null[0m[0m
+          [31m-[0m[0m volume_size           = 30 [90m-> null[0m[0m
+          [31m-[0m[0m volume_type           = "gp3" [90m-> null[0m[0m
+            [90m# (1 unchanged attribute hidden)[0m[0m
+        }
+    }
+
+[1m  # module.node[0].aws_key_pair.raft[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_key_pair" "raft" {
+      [31m-[0m[0m arn             = "arn:aws:ec2:us-east-1:560449670342:key-pair/sameregi6865-raft-quic-same-node1" [90m-> null[0m[0m
+      [31m-[0m[0m fingerprint     = "ab:f2:8f:6a:0e:d9:ff:84:f5:f7:53:d7:ac:64:d6:6c" [90m-> null[0m[0m
+      [31m-[0m[0m id              = "sameregi6865-raft-quic-same-node1" [90m-> null[0m[0m
+      [31m-[0m[0m key_name        = "sameregi6865-raft-quic-same-node1" [90m-> null[0m[0m
+      [31m-[0m[0m key_pair_id     = "key-0a3f45fc1014cae99" [90m-> null[0m[0m
+      [31m-[0m[0m key_type        = "rsa" [90m-> null[0m[0m
+      [31m-[0m[0m public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDA0JdizYJBp/CWaQoxZfW0nheVvHGNTCDqYxdnQdOe3U3KZzIuvXtnx/wTyun9CKCfdfWThXoAoieOOnjVMIPVxvq6MhRLctdoqJD9YAIxHUuMuHjEbXb0Y1ssdYg+h4u4Vc/mfc4fcmSNr5tJnMZs62P5t14qOhu1ufOMmEdlx71+CEi2Fzlo/GH/JeLRpOHSJu2NjxdLSRS5ErmvtCi/VLlvifJlgii5IjNkTxg2Zv8FZ4IAKzy3BRb1DDRRLGoVxxhIjHJxeNe3yWQtj2sNZD1lO61dO009ovOYMImdKx7jFPXl7H5S8hRl3jMTtLft5JIRV46DQw1M36ctKIcrxtbky9uVg2sgFDnKG3tuWWuEGLqhZju/woH4MMo7iTi/oKii9742kQXDnDPXWL3NRjg9arrL+O4fTf2IoQgtAyOVMnKLQ44yCFsa0vnrqO4lOCXu3pnFgLvgd9ouwAvEpRYfTMZilO71WZ2i4+Uk8acZFzxb5rlwhEckwUAt5nAqoZnD9n6tklLwq7PAHdMAJs0VohJcg4TqIXjGai7SazgQcrGgCDPVjVKw+P8sgX2zIVi1cn9Iw21p56/Zfeqn/Ek9+r9zeiNmEjYj/gXwhwQwJeg+C0hm3auEv9qsykrLdPS2Khh1VBR44yhq47bJ/qBc+N7AyJxZleWcI9fObQ==" [90m-> null[0m[0m
+      [31m-[0m[0m tags            = {
+          [31m-[0m[0m "Node"    = "node1"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all        = {
+          [31m-[0m[0m "Node"    = "node1"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[0].aws_security_group.raft[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_security_group" "raft" {
+      [31m-[0m[0m arn                    = "arn:aws:ec2:us-east-1:560449670342:security-group/sg-0b45d6133379b8dff" [90m-> null[0m[0m
+      [31m-[0m[0m description            = "Raft-over-QUIC cluster node node1" [90m-> null[0m[0m
+      [31m-[0m[0m egress                 = [
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 0
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "-1"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 0
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m id                     = "sg-0b45d6133379b8dff" [90m-> null[0m[0m
+      [31m-[0m[0m ingress                = [
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 22
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 22
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 7001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "udp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 7001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 8001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 8001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 9001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 9001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m name                   = "sameregi6865-raft-quic-node1" [90m-> null[0m[0m
+      [31m-[0m[0m owner_id               = "560449670342" [90m-> null[0m[0m
+      [31m-[0m[0m revoke_rules_on_delete = false [90m-> null[0m[0m
+      [31m-[0m[0m tags                   = {
+          [31m-[0m[0m "Node"    = "node1"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all               = {
+          [31m-[0m[0m "Node"    = "node1"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m vpc_id                 = "vpc-0d14d4388abbe65e8" [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[1].aws_iam_instance_profile.raft_ssm[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_instance_profile" "raft_ssm" {
+      [31m-[0m[0m arn         = "arn:aws:iam::560449670342:instance-profile/sameregi6865-raft-quic-same-ssm-node2" [90m-> null[0m[0m
+      [31m-[0m[0m create_date = "2026-04-20T17:48:28Z" [90m-> null[0m[0m
+      [31m-[0m[0m id          = "sameregi6865-raft-quic-same-ssm-node2" [90m-> null[0m[0m
+      [31m-[0m[0m name        = "sameregi6865-raft-quic-same-ssm-node2" [90m-> null[0m[0m
+      [31m-[0m[0m path        = "/" [90m-> null[0m[0m
+      [31m-[0m[0m role        = "sameregi6865-raft-quic-same-ssm-node2" [90m-> null[0m[0m
+      [31m-[0m[0m tags        = {} [90m-> null[0m[0m
+      [31m-[0m[0m tags_all    = {} [90m-> null[0m[0m
+      [31m-[0m[0m unique_id   = "AIPAYE7LHJTDGPIX33OUJ" [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[1].aws_iam_role.raft_ssm[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_role" "raft_ssm" {
+      [31m-[0m[0m arn                   = "arn:aws:iam::560449670342:role/sameregi6865-raft-quic-same-ssm-node2" [90m-> null[0m[0m
+      [31m-[0m[0m assume_role_policy    = jsonencode(
+            {
+              [31m-[0m[0m Statement = [
+                  [31m-[0m[0m {
+                      [31m-[0m[0m Action    = "sts:AssumeRole"
+                      [31m-[0m[0m Effect    = "Allow"
+                      [31m-[0m[0m Principal = {
+                          [31m-[0m[0m Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              [31m-[0m[0m Version   = "2012-10-17"
+            }
+        ) [90m-> null[0m[0m
+      [31m-[0m[0m create_date           = "2026-04-20T17:48:25Z" [90m-> null[0m[0m
+      [31m-[0m[0m force_detach_policies = false [90m-> null[0m[0m
+      [31m-[0m[0m id                    = "sameregi6865-raft-quic-same-ssm-node2" [90m-> null[0m[0m
+      [31m-[0m[0m managed_policy_arns   = [
+          [31m-[0m[0m "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m max_session_duration  = 3600 [90m-> null[0m[0m
+      [31m-[0m[0m name                  = "sameregi6865-raft-quic-same-ssm-node2" [90m-> null[0m[0m
+      [31m-[0m[0m path                  = "/" [90m-> null[0m[0m
+      [31m-[0m[0m tags                  = {
+          [31m-[0m[0m "Node"    = "node2"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all              = {
+          [31m-[0m[0m "Node"    = "node2"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m unique_id             = "AROAYE7LHJTDAQB2DDO4X" [90m-> null[0m[0m
+        [90m# (3 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.node[1].aws_iam_role_policy_attachment.ssm_core[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_role_policy_attachment" "ssm_core" {
+      [31m-[0m[0m id         = "sameregi6865-raft-quic-same-ssm-node2-20260420174827751300000005" [90m-> null[0m[0m
+      [31m-[0m[0m policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" [90m-> null[0m[0m
+      [31m-[0m[0m role       = "sameregi6865-raft-quic-same-ssm-node2" [90m-> null[0m[0m
+    }
+
+[1m  # module.node[1].aws_instance.node[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_instance" "node" {
+      [31m-[0m[0m ami                                  = "ami-0102a36b3e9d5e4df" [90m-> null[0m[0m
+      [31m-[0m[0m arn                                  = "arn:aws:ec2:us-east-1:560449670342:instance/i-0acd86d14485cae31" [90m-> null[0m[0m
+      [31m-[0m[0m associate_public_ip_address          = true [90m-> null[0m[0m
+      [31m-[0m[0m availability_zone                    = "us-east-1d" [90m-> null[0m[0m
+      [31m-[0m[0m cpu_core_count                       = 1 [90m-> null[0m[0m
+      [31m-[0m[0m cpu_threads_per_core                 = 2 [90m-> null[0m[0m
+      [31m-[0m[0m disable_api_stop                     = false [90m-> null[0m[0m
+      [31m-[0m[0m disable_api_termination              = false [90m-> null[0m[0m
+      [31m-[0m[0m ebs_optimized                        = false [90m-> null[0m[0m
+      [31m-[0m[0m get_password_data                    = false [90m-> null[0m[0m
+      [31m-[0m[0m hibernation                          = false [90m-> null[0m[0m
+      [31m-[0m[0m iam_instance_profile                 = "sameregi6865-raft-quic-same-ssm-node2" [90m-> null[0m[0m
+      [31m-[0m[0m id                                   = "i-0acd86d14485cae31" [90m-> null[0m[0m
+      [31m-[0m[0m instance_initiated_shutdown_behavior = "stop" [90m-> null[0m[0m
+      [31m-[0m[0m instance_state                       = "running" [90m-> null[0m[0m
+      [31m-[0m[0m instance_type                        = "t3.micro" [90m-> null[0m[0m
+      [31m-[0m[0m ipv6_address_count                   = 0 [90m-> null[0m[0m
+      [31m-[0m[0m ipv6_addresses                       = [] [90m-> null[0m[0m
+      [31m-[0m[0m key_name                             = "sameregi6865-raft-quic-same-node2" [90m-> null[0m[0m
+      [31m-[0m[0m monitoring                           = false [90m-> null[0m[0m
+      [31m-[0m[0m placement_partition_number           = 0 [90m-> null[0m[0m
+      [31m-[0m[0m primary_network_interface_id         = "eni-0736eca761612bcb9" [90m-> null[0m[0m
+      [31m-[0m[0m private_dns                          = "ip-172-31-47-124.ec2.internal" [90m-> null[0m[0m
+      [31m-[0m[0m private_ip                           = "172.31.47.124" [90m-> null[0m[0m
+      [31m-[0m[0m public_dns                           = "ec2-54-242-97-192.compute-1.amazonaws.com" [90m-> null[0m[0m
+      [31m-[0m[0m public_ip                            = "54.242.97.192" [90m-> null[0m[0m
+      [31m-[0m[0m secondary_private_ips                = [] [90m-> null[0m[0m
+      [31m-[0m[0m security_groups                      = [
+          [31m-[0m[0m "sameregi6865-raft-quic-node2",
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m source_dest_check                    = true [90m-> null[0m[0m
+      [31m-[0m[0m subnet_id                            = "subnet-055764690b8558cd1" [90m-> null[0m[0m
+      [31m-[0m[0m tags                                 = {
+          [31m-[0m[0m "Name"    = "sameregi6865-raft-quic-node2"
+          [31m-[0m[0m "Node"    = "node2"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all                             = {
+          [31m-[0m[0m "Name"    = "sameregi6865-raft-quic-node2"
+          [31m-[0m[0m "Node"    = "node2"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tenancy                              = "default" [90m-> null[0m[0m
+      [31m-[0m[0m user_data_replace_on_change          = false [90m-> null[0m[0m
+      [31m-[0m[0m vpc_security_group_ids               = [
+          [31m-[0m[0m "sg-0d023f6d529cccd93",
+        ] [90m-> null[0m[0m
+        [90m# (6 unchanged attributes hidden)[0m[0m
+
+      [31m-[0m[0m capacity_reservation_specification {
+          [31m-[0m[0m capacity_reservation_preference = "open" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m cpu_options {
+          [31m-[0m[0m core_count       = 1 [90m-> null[0m[0m
+          [31m-[0m[0m threads_per_core = 2 [90m-> null[0m[0m
+            [90m# (1 unchanged attribute hidden)[0m[0m
+        }
+
+      [31m-[0m[0m credit_specification {
+          [31m-[0m[0m cpu_credits = "unlimited" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m enclave_options {
+          [31m-[0m[0m enabled = false [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m maintenance_options {
+          [31m-[0m[0m auto_recovery = "default" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m metadata_options {
+          [31m-[0m[0m http_endpoint               = "enabled" [90m-> null[0m[0m
+          [31m-[0m[0m http_protocol_ipv6          = "disabled" [90m-> null[0m[0m
+          [31m-[0m[0m http_put_response_hop_limit = 2 [90m-> null[0m[0m
+          [31m-[0m[0m http_tokens                 = "required" [90m-> null[0m[0m
+          [31m-[0m[0m instance_metadata_tags      = "disabled" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m private_dns_name_options {
+          [31m-[0m[0m enable_resource_name_dns_a_record    = false [90m-> null[0m[0m
+          [31m-[0m[0m enable_resource_name_dns_aaaa_record = false [90m-> null[0m[0m
+          [31m-[0m[0m hostname_type                        = "ip-name" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m root_block_device {
+          [31m-[0m[0m delete_on_termination = true [90m-> null[0m[0m
+          [31m-[0m[0m device_name           = "/dev/xvda" [90m-> null[0m[0m
+          [31m-[0m[0m encrypted             = false [90m-> null[0m[0m
+          [31m-[0m[0m iops                  = 3000 [90m-> null[0m[0m
+          [31m-[0m[0m tags                  = {} [90m-> null[0m[0m
+          [31m-[0m[0m tags_all              = {} [90m-> null[0m[0m
+          [31m-[0m[0m throughput            = 125 [90m-> null[0m[0m
+          [31m-[0m[0m volume_id             = "vol-0d94792460d60b96f" [90m-> null[0m[0m
+          [31m-[0m[0m volume_size           = 30 [90m-> null[0m[0m
+          [31m-[0m[0m volume_type           = "gp3" [90m-> null[0m[0m
+            [90m# (1 unchanged attribute hidden)[0m[0m
+        }
+    }
+
+[1m  # module.node[1].aws_key_pair.raft[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_key_pair" "raft" {
+      [31m-[0m[0m arn             = "arn:aws:ec2:us-east-1:560449670342:key-pair/sameregi6865-raft-quic-same-node2" [90m-> null[0m[0m
+      [31m-[0m[0m fingerprint     = "ab:f2:8f:6a:0e:d9:ff:84:f5:f7:53:d7:ac:64:d6:6c" [90m-> null[0m[0m
+      [31m-[0m[0m id              = "sameregi6865-raft-quic-same-node2" [90m-> null[0m[0m
+      [31m-[0m[0m key_name        = "sameregi6865-raft-quic-same-node2" [90m-> null[0m[0m
+      [31m-[0m[0m key_pair_id     = "key-0fcda8f98fe94a586" [90m-> null[0m[0m
+      [31m-[0m[0m key_type        = "rsa" [90m-> null[0m[0m
+      [31m-[0m[0m public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDA0JdizYJBp/CWaQoxZfW0nheVvHGNTCDqYxdnQdOe3U3KZzIuvXtnx/wTyun9CKCfdfWThXoAoieOOnjVMIPVxvq6MhRLctdoqJD9YAIxHUuMuHjEbXb0Y1ssdYg+h4u4Vc/mfc4fcmSNr5tJnMZs62P5t14qOhu1ufOMmEdlx71+CEi2Fzlo/GH/JeLRpOHSJu2NjxdLSRS5ErmvtCi/VLlvifJlgii5IjNkTxg2Zv8FZ4IAKzy3BRb1DDRRLGoVxxhIjHJxeNe3yWQtj2sNZD1lO61dO009ovOYMImdKx7jFPXl7H5S8hRl3jMTtLft5JIRV46DQw1M36ctKIcrxtbky9uVg2sgFDnKG3tuWWuEGLqhZju/woH4MMo7iTi/oKii9742kQXDnDPXWL3NRjg9arrL+O4fTf2IoQgtAyOVMnKLQ44yCFsa0vnrqO4lOCXu3pnFgLvgd9ouwAvEpRYfTMZilO71WZ2i4+Uk8acZFzxb5rlwhEckwUAt5nAqoZnD9n6tklLwq7PAHdMAJs0VohJcg4TqIXjGai7SazgQcrGgCDPVjVKw+P8sgX2zIVi1cn9Iw21p56/Zfeqn/Ek9+r9zeiNmEjYj/gXwhwQwJeg+C0hm3auEv9qsykrLdPS2Khh1VBR44yhq47bJ/qBc+N7AyJxZleWcI9fObQ==" [90m-> null[0m[0m
+      [31m-[0m[0m tags            = {
+          [31m-[0m[0m "Node"    = "node2"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all        = {
+          [31m-[0m[0m "Node"    = "node2"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[1].aws_security_group.raft[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_security_group" "raft" {
+      [31m-[0m[0m arn                    = "arn:aws:ec2:us-east-1:560449670342:security-group/sg-0d023f6d529cccd93" [90m-> null[0m[0m
+      [31m-[0m[0m description            = "Raft-over-QUIC cluster node node2" [90m-> null[0m[0m
+      [31m-[0m[0m egress                 = [
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 0
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "-1"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 0
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m id                     = "sg-0d023f6d529cccd93" [90m-> null[0m[0m
+      [31m-[0m[0m ingress                = [
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 22
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 22
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 7001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "udp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 7001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 8001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 8001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 9001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 9001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m name                   = "sameregi6865-raft-quic-node2" [90m-> null[0m[0m
+      [31m-[0m[0m owner_id               = "560449670342" [90m-> null[0m[0m
+      [31m-[0m[0m revoke_rules_on_delete = false [90m-> null[0m[0m
+      [31m-[0m[0m tags                   = {
+          [31m-[0m[0m "Node"    = "node2"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all               = {
+          [31m-[0m[0m "Node"    = "node2"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m vpc_id                 = "vpc-0d14d4388abbe65e8" [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[2].aws_iam_instance_profile.raft_ssm[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_instance_profile" "raft_ssm" {
+      [31m-[0m[0m arn         = "arn:aws:iam::560449670342:instance-profile/sameregi6865-raft-quic-same-ssm-node3" [90m-> null[0m[0m
+      [31m-[0m[0m create_date = "2026-04-20T17:48:28Z" [90m-> null[0m[0m
+      [31m-[0m[0m id          = "sameregi6865-raft-quic-same-ssm-node3" [90m-> null[0m[0m
+      [31m-[0m[0m name        = "sameregi6865-raft-quic-same-ssm-node3" [90m-> null[0m[0m
+      [31m-[0m[0m path        = "/" [90m-> null[0m[0m
+      [31m-[0m[0m role        = "sameregi6865-raft-quic-same-ssm-node3" [90m-> null[0m[0m
+      [31m-[0m[0m tags        = {} [90m-> null[0m[0m
+      [31m-[0m[0m tags_all    = {} [90m-> null[0m[0m
+      [31m-[0m[0m unique_id   = "AIPAYE7LHJTDESAA2I7N5" [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[2].aws_iam_role.raft_ssm[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_role" "raft_ssm" {
+      [31m-[0m[0m arn                   = "arn:aws:iam::560449670342:role/sameregi6865-raft-quic-same-ssm-node3" [90m-> null[0m[0m
+      [31m-[0m[0m assume_role_policy    = jsonencode(
+            {
+              [31m-[0m[0m Statement = [
+                  [31m-[0m[0m {
+                      [31m-[0m[0m Action    = "sts:AssumeRole"
+                      [31m-[0m[0m Effect    = "Allow"
+                      [31m-[0m[0m Principal = {
+                          [31m-[0m[0m Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              [31m-[0m[0m Version   = "2012-10-17"
+            }
+        ) [90m-> null[0m[0m
+      [31m-[0m[0m create_date           = "2026-04-20T17:48:25Z" [90m-> null[0m[0m
+      [31m-[0m[0m force_detach_policies = false [90m-> null[0m[0m
+      [31m-[0m[0m id                    = "sameregi6865-raft-quic-same-ssm-node3" [90m-> null[0m[0m
+      [31m-[0m[0m managed_policy_arns   = [
+          [31m-[0m[0m "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m max_session_duration  = 3600 [90m-> null[0m[0m
+      [31m-[0m[0m name                  = "sameregi6865-raft-quic-same-ssm-node3" [90m-> null[0m[0m
+      [31m-[0m[0m path                  = "/" [90m-> null[0m[0m
+      [31m-[0m[0m tags                  = {
+          [31m-[0m[0m "Node"    = "node3"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all              = {
+          [31m-[0m[0m "Node"    = "node3"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m unique_id             = "AROAYE7LHJTDBDXC5SLJU" [90m-> null[0m[0m
+        [90m# (3 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.node[2].aws_iam_role_policy_attachment.ssm_core[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_role_policy_attachment" "ssm_core" {
+      [31m-[0m[0m id         = "sameregi6865-raft-quic-same-ssm-node3-20260420174827655700000004" [90m-> null[0m[0m
+      [31m-[0m[0m policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" [90m-> null[0m[0m
+      [31m-[0m[0m role       = "sameregi6865-raft-quic-same-ssm-node3" [90m-> null[0m[0m
+    }
+
+[1m  # module.node[2].aws_instance.node[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_instance" "node" {
+      [31m-[0m[0m ami                                  = "ami-0102a36b3e9d5e4df" [90m-> null[0m[0m
+      [31m-[0m[0m arn                                  = "arn:aws:ec2:us-east-1:560449670342:instance/i-0dc7c548036432aa6" [90m-> null[0m[0m
+      [31m-[0m[0m associate_public_ip_address          = true [90m-> null[0m[0m
+      [31m-[0m[0m availability_zone                    = "us-east-1d" [90m-> null[0m[0m
+      [31m-[0m[0m cpu_core_count                       = 1 [90m-> null[0m[0m
+      [31m-[0m[0m cpu_threads_per_core                 = 2 [90m-> null[0m[0m
+      [31m-[0m[0m disable_api_stop                     = false [90m-> null[0m[0m
+      [31m-[0m[0m disable_api_termination              = false [90m-> null[0m[0m
+      [31m-[0m[0m ebs_optimized                        = false [90m-> null[0m[0m
+      [31m-[0m[0m get_password_data                    = false [90m-> null[0m[0m
+      [31m-[0m[0m hibernation                          = false [90m-> null[0m[0m
+      [31m-[0m[0m iam_instance_profile                 = "sameregi6865-raft-quic-same-ssm-node3" [90m-> null[0m[0m
+      [31m-[0m[0m id                                   = "i-0dc7c548036432aa6" [90m-> null[0m[0m
+      [31m-[0m[0m instance_initiated_shutdown_behavior = "stop" [90m-> null[0m[0m
+      [31m-[0m[0m instance_state                       = "running" [90m-> null[0m[0m
+      [31m-[0m[0m instance_type                        = "t3.micro" [90m-> null[0m[0m
+      [31m-[0m[0m ipv6_address_count                   = 0 [90m-> null[0m[0m
+      [31m-[0m[0m ipv6_addresses                       = [] [90m-> null[0m[0m
+      [31m-[0m[0m key_name                             = "sameregi6865-raft-quic-same-node3" [90m-> null[0m[0m
+      [31m-[0m[0m monitoring                           = false [90m-> null[0m[0m
+      [31m-[0m[0m placement_partition_number           = 0 [90m-> null[0m[0m
+      [31m-[0m[0m primary_network_interface_id         = "eni-064e457686d647929" [90m-> null[0m[0m
+      [31m-[0m[0m private_dns                          = "ip-172-31-45-30.ec2.internal" [90m-> null[0m[0m
+      [31m-[0m[0m private_ip                           = "172.31.45.30" [90m-> null[0m[0m
+      [31m-[0m[0m public_dns                           = "ec2-54-84-81-14.compute-1.amazonaws.com" [90m-> null[0m[0m
+      [31m-[0m[0m public_ip                            = "54.84.81.14" [90m-> null[0m[0m
+      [31m-[0m[0m secondary_private_ips                = [] [90m-> null[0m[0m
+      [31m-[0m[0m security_groups                      = [
+          [31m-[0m[0m "sameregi6865-raft-quic-node3",
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m source_dest_check                    = true [90m-> null[0m[0m
+      [31m-[0m[0m subnet_id                            = "subnet-055764690b8558cd1" [90m-> null[0m[0m
+      [31m-[0m[0m tags                                 = {
+          [31m-[0m[0m "Name"    = "sameregi6865-raft-quic-node3"
+          [31m-[0m[0m "Node"    = "node3"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all                             = {
+          [31m-[0m[0m "Name"    = "sameregi6865-raft-quic-node3"
+          [31m-[0m[0m "Node"    = "node3"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tenancy                              = "default" [90m-> null[0m[0m
+      [31m-[0m[0m user_data_replace_on_change          = false [90m-> null[0m[0m
+      [31m-[0m[0m vpc_security_group_ids               = [
+          [31m-[0m[0m "sg-0ce5c5c8f4f18824c",
+        ] [90m-> null[0m[0m
+        [90m# (6 unchanged attributes hidden)[0m[0m
+
+      [31m-[0m[0m capacity_reservation_specification {
+          [31m-[0m[0m capacity_reservation_preference = "open" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m cpu_options {
+          [31m-[0m[0m core_count       = 1 [90m-> null[0m[0m
+          [31m-[0m[0m threads_per_core = 2 [90m-> null[0m[0m
+            [90m# (1 unchanged attribute hidden)[0m[0m
+        }
+
+      [31m-[0m[0m credit_specification {
+          [31m-[0m[0m cpu_credits = "unlimited" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m enclave_options {
+          [31m-[0m[0m enabled = false [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m maintenance_options {
+          [31m-[0m[0m auto_recovery = "default" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m metadata_options {
+          [31m-[0m[0m http_endpoint               = "enabled" [90m-> null[0m[0m
+          [31m-[0m[0m http_protocol_ipv6          = "disabled" [90m-> null[0m[0m
+          [31m-[0m[0m http_put_response_hop_limit = 2 [90m-> null[0m[0m
+          [31m-[0m[0m http_tokens                 = "required" [90m-> null[0m[0m
+          [31m-[0m[0m instance_metadata_tags      = "disabled" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m private_dns_name_options {
+          [31m-[0m[0m enable_resource_name_dns_a_record    = false [90m-> null[0m[0m
+          [31m-[0m[0m enable_resource_name_dns_aaaa_record = false [90m-> null[0m[0m
+          [31m-[0m[0m hostname_type                        = "ip-name" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m root_block_device {
+          [31m-[0m[0m delete_on_termination = true [90m-> null[0m[0m
+          [31m-[0m[0m device_name           = "/dev/xvda" [90m-> null[0m[0m
+          [31m-[0m[0m encrypted             = false [90m-> null[0m[0m
+          [31m-[0m[0m iops                  = 3000 [90m-> null[0m[0m
+          [31m-[0m[0m tags                  = {} [90m-> null[0m[0m
+          [31m-[0m[0m tags_all              = {} [90m-> null[0m[0m
+          [31m-[0m[0m throughput            = 125 [90m-> null[0m[0m
+          [31m-[0m[0m volume_id             = "vol-09893258b109c1abc" [90m-> null[0m[0m
+          [31m-[0m[0m volume_size           = 30 [90m-> null[0m[0m
+          [31m-[0m[0m volume_type           = "gp3" [90m-> null[0m[0m
+            [90m# (1 unchanged attribute hidden)[0m[0m
+        }
+    }
+
+[1m  # module.node[2].aws_key_pair.raft[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_key_pair" "raft" {
+      [31m-[0m[0m arn             = "arn:aws:ec2:us-east-1:560449670342:key-pair/sameregi6865-raft-quic-same-node3" [90m-> null[0m[0m
+      [31m-[0m[0m fingerprint     = "ab:f2:8f:6a:0e:d9:ff:84:f5:f7:53:d7:ac:64:d6:6c" [90m-> null[0m[0m
+      [31m-[0m[0m id              = "sameregi6865-raft-quic-same-node3" [90m-> null[0m[0m
+      [31m-[0m[0m key_name        = "sameregi6865-raft-quic-same-node3" [90m-> null[0m[0m
+      [31m-[0m[0m key_pair_id     = "key-0a7baccbf4fc61059" [90m-> null[0m[0m
+      [31m-[0m[0m key_type        = "rsa" [90m-> null[0m[0m
+      [31m-[0m[0m public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDA0JdizYJBp/CWaQoxZfW0nheVvHGNTCDqYxdnQdOe3U3KZzIuvXtnx/wTyun9CKCfdfWThXoAoieOOnjVMIPVxvq6MhRLctdoqJD9YAIxHUuMuHjEbXb0Y1ssdYg+h4u4Vc/mfc4fcmSNr5tJnMZs62P5t14qOhu1ufOMmEdlx71+CEi2Fzlo/GH/JeLRpOHSJu2NjxdLSRS5ErmvtCi/VLlvifJlgii5IjNkTxg2Zv8FZ4IAKzy3BRb1DDRRLGoVxxhIjHJxeNe3yWQtj2sNZD1lO61dO009ovOYMImdKx7jFPXl7H5S8hRl3jMTtLft5JIRV46DQw1M36ctKIcrxtbky9uVg2sgFDnKG3tuWWuEGLqhZju/woH4MMo7iTi/oKii9742kQXDnDPXWL3NRjg9arrL+O4fTf2IoQgtAyOVMnKLQ44yCFsa0vnrqO4lOCXu3pnFgLvgd9ouwAvEpRYfTMZilO71WZ2i4+Uk8acZFzxb5rlwhEckwUAt5nAqoZnD9n6tklLwq7PAHdMAJs0VohJcg4TqIXjGai7SazgQcrGgCDPVjVKw+P8sgX2zIVi1cn9Iw21p56/Zfeqn/Ek9+r9zeiNmEjYj/gXwhwQwJeg+C0hm3auEv9qsykrLdPS2Khh1VBR44yhq47bJ/qBc+N7AyJxZleWcI9fObQ==" [90m-> null[0m[0m
+      [31m-[0m[0m tags            = {
+          [31m-[0m[0m "Node"    = "node3"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all        = {
+          [31m-[0m[0m "Node"    = "node3"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[2].aws_security_group.raft[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_security_group" "raft" {
+      [31m-[0m[0m arn                    = "arn:aws:ec2:us-east-1:560449670342:security-group/sg-0ce5c5c8f4f18824c" [90m-> null[0m[0m
+      [31m-[0m[0m description            = "Raft-over-QUIC cluster node node3" [90m-> null[0m[0m
+      [31m-[0m[0m egress                 = [
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 0
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "-1"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 0
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m id                     = "sg-0ce5c5c8f4f18824c" [90m-> null[0m[0m
+      [31m-[0m[0m ingress                = [
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 22
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 22
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 7001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "udp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 7001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 8001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 8001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 9001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 9001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m name                   = "sameregi6865-raft-quic-node3" [90m-> null[0m[0m
+      [31m-[0m[0m owner_id               = "560449670342" [90m-> null[0m[0m
+      [31m-[0m[0m revoke_rules_on_delete = false [90m-> null[0m[0m
+      [31m-[0m[0m tags                   = {
+          [31m-[0m[0m "Node"    = "node3"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all               = {
+          [31m-[0m[0m "Node"    = "node3"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m vpc_id                 = "vpc-0d14d4388abbe65e8" [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[3].aws_iam_instance_profile.raft_ssm[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_instance_profile" "raft_ssm" {
+      [31m-[0m[0m arn         = "arn:aws:iam::560449670342:instance-profile/sameregi6865-raft-quic-same-ssm-node4" [90m-> null[0m[0m
+      [31m-[0m[0m create_date = "2026-04-20T17:48:28Z" [90m-> null[0m[0m
+      [31m-[0m[0m id          = "sameregi6865-raft-quic-same-ssm-node4" [90m-> null[0m[0m
+      [31m-[0m[0m name        = "sameregi6865-raft-quic-same-ssm-node4" [90m-> null[0m[0m
+      [31m-[0m[0m path        = "/" [90m-> null[0m[0m
+      [31m-[0m[0m role        = "sameregi6865-raft-quic-same-ssm-node4" [90m-> null[0m[0m
+      [31m-[0m[0m tags        = {} [90m-> null[0m[0m
+      [31m-[0m[0m tags_all    = {} [90m-> null[0m[0m
+      [31m-[0m[0m unique_id   = "AIPAYE7LHJTDET4OLDHZW" [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[3].aws_iam_role.raft_ssm[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_role" "raft_ssm" {
+      [31m-[0m[0m arn                   = "arn:aws:iam::560449670342:role/sameregi6865-raft-quic-same-ssm-node4" [90m-> null[0m[0m
+      [31m-[0m[0m assume_role_policy    = jsonencode(
+            {
+              [31m-[0m[0m Statement = [
+                  [31m-[0m[0m {
+                      [31m-[0m[0m Action    = "sts:AssumeRole"
+                      [31m-[0m[0m Effect    = "Allow"
+                      [31m-[0m[0m Principal = {
+                          [31m-[0m[0m Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              [31m-[0m[0m Version   = "2012-10-17"
+            }
+        ) [90m-> null[0m[0m
+      [31m-[0m[0m create_date           = "2026-04-20T17:48:25Z" [90m-> null[0m[0m
+      [31m-[0m[0m force_detach_policies = false [90m-> null[0m[0m
+      [31m-[0m[0m id                    = "sameregi6865-raft-quic-same-ssm-node4" [90m-> null[0m[0m
+      [31m-[0m[0m managed_policy_arns   = [
+          [31m-[0m[0m "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m max_session_duration  = 3600 [90m-> null[0m[0m
+      [31m-[0m[0m name                  = "sameregi6865-raft-quic-same-ssm-node4" [90m-> null[0m[0m
+      [31m-[0m[0m path                  = "/" [90m-> null[0m[0m
+      [31m-[0m[0m tags                  = {
+          [31m-[0m[0m "Node"    = "node4"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all              = {
+          [31m-[0m[0m "Node"    = "node4"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m unique_id             = "AROAYE7LHJTDMWW2NVGDV" [90m-> null[0m[0m
+        [90m# (3 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.node[3].aws_iam_role_policy_attachment.ssm_core[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_role_policy_attachment" "ssm_core" {
+      [31m-[0m[0m id         = "sameregi6865-raft-quic-same-ssm-node4-20260420174827613500000003" [90m-> null[0m[0m
+      [31m-[0m[0m policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" [90m-> null[0m[0m
+      [31m-[0m[0m role       = "sameregi6865-raft-quic-same-ssm-node4" [90m-> null[0m[0m
+    }
+
+[1m  # module.node[3].aws_instance.node[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_instance" "node" {
+      [31m-[0m[0m ami                                  = "ami-0102a36b3e9d5e4df" [90m-> null[0m[0m
+      [31m-[0m[0m arn                                  = "arn:aws:ec2:us-east-1:560449670342:instance/i-07ae9edd0e64a7e75" [90m-> null[0m[0m
+      [31m-[0m[0m associate_public_ip_address          = true [90m-> null[0m[0m
+      [31m-[0m[0m availability_zone                    = "us-east-1d" [90m-> null[0m[0m
+      [31m-[0m[0m cpu_core_count                       = 1 [90m-> null[0m[0m
+      [31m-[0m[0m cpu_threads_per_core                 = 2 [90m-> null[0m[0m
+      [31m-[0m[0m disable_api_stop                     = false [90m-> null[0m[0m
+      [31m-[0m[0m disable_api_termination              = false [90m-> null[0m[0m
+      [31m-[0m[0m ebs_optimized                        = false [90m-> null[0m[0m
+      [31m-[0m[0m get_password_data                    = false [90m-> null[0m[0m
+      [31m-[0m[0m hibernation                          = false [90m-> null[0m[0m
+      [31m-[0m[0m iam_instance_profile                 = "sameregi6865-raft-quic-same-ssm-node4" [90m-> null[0m[0m
+      [31m-[0m[0m id                                   = "i-07ae9edd0e64a7e75" [90m-> null[0m[0m
+      [31m-[0m[0m instance_initiated_shutdown_behavior = "stop" [90m-> null[0m[0m
+      [31m-[0m[0m instance_state                       = "running" [90m-> null[0m[0m
+      [31m-[0m[0m instance_type                        = "t3.micro" [90m-> null[0m[0m
+      [31m-[0m[0m ipv6_address_count                   = 0 [90m-> null[0m[0m
+      [31m-[0m[0m ipv6_addresses                       = [] [90m-> null[0m[0m
+      [31m-[0m[0m key_name                             = "sameregi6865-raft-quic-same-node4" [90m-> null[0m[0m
+      [31m-[0m[0m monitoring                           = false [90m-> null[0m[0m
+      [31m-[0m[0m placement_partition_number           = 0 [90m-> null[0m[0m
+      [31m-[0m[0m primary_network_interface_id         = "eni-01f5b4a08edffa3cf" [90m-> null[0m[0m
+      [31m-[0m[0m private_dns                          = "ip-172-31-43-75.ec2.internal" [90m-> null[0m[0m
+      [31m-[0m[0m private_ip                           = "172.31.43.75" [90m-> null[0m[0m
+      [31m-[0m[0m public_dns                           = "ec2-32-192-93-252.compute-1.amazonaws.com" [90m-> null[0m[0m
+      [31m-[0m[0m public_ip                            = "32.192.93.252" [90m-> null[0m[0m
+      [31m-[0m[0m secondary_private_ips                = [] [90m-> null[0m[0m
+      [31m-[0m[0m security_groups                      = [
+          [31m-[0m[0m "sameregi6865-raft-quic-node4",
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m source_dest_check                    = true [90m-> null[0m[0m
+      [31m-[0m[0m subnet_id                            = "subnet-055764690b8558cd1" [90m-> null[0m[0m
+      [31m-[0m[0m tags                                 = {
+          [31m-[0m[0m "Name"    = "sameregi6865-raft-quic-node4"
+          [31m-[0m[0m "Node"    = "node4"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all                             = {
+          [31m-[0m[0m "Name"    = "sameregi6865-raft-quic-node4"
+          [31m-[0m[0m "Node"    = "node4"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tenancy                              = "default" [90m-> null[0m[0m
+      [31m-[0m[0m user_data_replace_on_change          = false [90m-> null[0m[0m
+      [31m-[0m[0m vpc_security_group_ids               = [
+          [31m-[0m[0m "sg-06056527f590e1f00",
+        ] [90m-> null[0m[0m
+        [90m# (6 unchanged attributes hidden)[0m[0m
+
+      [31m-[0m[0m capacity_reservation_specification {
+          [31m-[0m[0m capacity_reservation_preference = "open" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m cpu_options {
+          [31m-[0m[0m core_count       = 1 [90m-> null[0m[0m
+          [31m-[0m[0m threads_per_core = 2 [90m-> null[0m[0m
+            [90m# (1 unchanged attribute hidden)[0m[0m
+        }
+
+      [31m-[0m[0m credit_specification {
+          [31m-[0m[0m cpu_credits = "unlimited" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m enclave_options {
+          [31m-[0m[0m enabled = false [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m maintenance_options {
+          [31m-[0m[0m auto_recovery = "default" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m metadata_options {
+          [31m-[0m[0m http_endpoint               = "enabled" [90m-> null[0m[0m
+          [31m-[0m[0m http_protocol_ipv6          = "disabled" [90m-> null[0m[0m
+          [31m-[0m[0m http_put_response_hop_limit = 2 [90m-> null[0m[0m
+          [31m-[0m[0m http_tokens                 = "required" [90m-> null[0m[0m
+          [31m-[0m[0m instance_metadata_tags      = "disabled" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m private_dns_name_options {
+          [31m-[0m[0m enable_resource_name_dns_a_record    = false [90m-> null[0m[0m
+          [31m-[0m[0m enable_resource_name_dns_aaaa_record = false [90m-> null[0m[0m
+          [31m-[0m[0m hostname_type                        = "ip-name" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m root_block_device {
+          [31m-[0m[0m delete_on_termination = true [90m-> null[0m[0m
+          [31m-[0m[0m device_name           = "/dev/xvda" [90m-> null[0m[0m
+          [31m-[0m[0m encrypted             = false [90m-> null[0m[0m
+          [31m-[0m[0m iops                  = 3000 [90m-> null[0m[0m
+          [31m-[0m[0m tags                  = {} [90m-> null[0m[0m
+          [31m-[0m[0m tags_all              = {} [90m-> null[0m[0m
+          [31m-[0m[0m throughput            = 125 [90m-> null[0m[0m
+          [31m-[0m[0m volume_id             = "vol-02ad2442a690d420a" [90m-> null[0m[0m
+          [31m-[0m[0m volume_size           = 30 [90m-> null[0m[0m
+          [31m-[0m[0m volume_type           = "gp3" [90m-> null[0m[0m
+            [90m# (1 unchanged attribute hidden)[0m[0m
+        }
+    }
+
+[1m  # module.node[3].aws_key_pair.raft[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_key_pair" "raft" {
+      [31m-[0m[0m arn             = "arn:aws:ec2:us-east-1:560449670342:key-pair/sameregi6865-raft-quic-same-node4" [90m-> null[0m[0m
+      [31m-[0m[0m fingerprint     = "ab:f2:8f:6a:0e:d9:ff:84:f5:f7:53:d7:ac:64:d6:6c" [90m-> null[0m[0m
+      [31m-[0m[0m id              = "sameregi6865-raft-quic-same-node4" [90m-> null[0m[0m
+      [31m-[0m[0m key_name        = "sameregi6865-raft-quic-same-node4" [90m-> null[0m[0m
+      [31m-[0m[0m key_pair_id     = "key-044b96c195f27bb40" [90m-> null[0m[0m
+      [31m-[0m[0m key_type        = "rsa" [90m-> null[0m[0m
+      [31m-[0m[0m public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDA0JdizYJBp/CWaQoxZfW0nheVvHGNTCDqYxdnQdOe3U3KZzIuvXtnx/wTyun9CKCfdfWThXoAoieOOnjVMIPVxvq6MhRLctdoqJD9YAIxHUuMuHjEbXb0Y1ssdYg+h4u4Vc/mfc4fcmSNr5tJnMZs62P5t14qOhu1ufOMmEdlx71+CEi2Fzlo/GH/JeLRpOHSJu2NjxdLSRS5ErmvtCi/VLlvifJlgii5IjNkTxg2Zv8FZ4IAKzy3BRb1DDRRLGoVxxhIjHJxeNe3yWQtj2sNZD1lO61dO009ovOYMImdKx7jFPXl7H5S8hRl3jMTtLft5JIRV46DQw1M36ctKIcrxtbky9uVg2sgFDnKG3tuWWuEGLqhZju/woH4MMo7iTi/oKii9742kQXDnDPXWL3NRjg9arrL+O4fTf2IoQgtAyOVMnKLQ44yCFsa0vnrqO4lOCXu3pnFgLvgd9ouwAvEpRYfTMZilO71WZ2i4+Uk8acZFzxb5rlwhEckwUAt5nAqoZnD9n6tklLwq7PAHdMAJs0VohJcg4TqIXjGai7SazgQcrGgCDPVjVKw+P8sgX2zIVi1cn9Iw21p56/Zfeqn/Ek9+r9zeiNmEjYj/gXwhwQwJeg+C0hm3auEv9qsykrLdPS2Khh1VBR44yhq47bJ/qBc+N7AyJxZleWcI9fObQ==" [90m-> null[0m[0m
+      [31m-[0m[0m tags            = {
+          [31m-[0m[0m "Node"    = "node4"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all        = {
+          [31m-[0m[0m "Node"    = "node4"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[3].aws_security_group.raft[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_security_group" "raft" {
+      [31m-[0m[0m arn                    = "arn:aws:ec2:us-east-1:560449670342:security-group/sg-06056527f590e1f00" [90m-> null[0m[0m
+      [31m-[0m[0m description            = "Raft-over-QUIC cluster node node4" [90m-> null[0m[0m
+      [31m-[0m[0m egress                 = [
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 0
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "-1"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 0
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m id                     = "sg-06056527f590e1f00" [90m-> null[0m[0m
+      [31m-[0m[0m ingress                = [
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 22
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 22
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 7001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "udp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 7001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 8001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 8001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 9001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 9001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m name                   = "sameregi6865-raft-quic-node4" [90m-> null[0m[0m
+      [31m-[0m[0m owner_id               = "560449670342" [90m-> null[0m[0m
+      [31m-[0m[0m revoke_rules_on_delete = false [90m-> null[0m[0m
+      [31m-[0m[0m tags                   = {
+          [31m-[0m[0m "Node"    = "node4"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all               = {
+          [31m-[0m[0m "Node"    = "node4"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m vpc_id                 = "vpc-0d14d4388abbe65e8" [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[4].aws_iam_instance_profile.raft_ssm[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_instance_profile" "raft_ssm" {
+      [31m-[0m[0m arn         = "arn:aws:iam::560449670342:instance-profile/sameregi6865-raft-quic-same-ssm-node5" [90m-> null[0m[0m
+      [31m-[0m[0m create_date = "2026-04-20T17:48:28Z" [90m-> null[0m[0m
+      [31m-[0m[0m id          = "sameregi6865-raft-quic-same-ssm-node5" [90m-> null[0m[0m
+      [31m-[0m[0m name        = "sameregi6865-raft-quic-same-ssm-node5" [90m-> null[0m[0m
+      [31m-[0m[0m path        = "/" [90m-> null[0m[0m
+      [31m-[0m[0m role        = "sameregi6865-raft-quic-same-ssm-node5" [90m-> null[0m[0m
+      [31m-[0m[0m tags        = {} [90m-> null[0m[0m
+      [31m-[0m[0m tags_all    = {} [90m-> null[0m[0m
+      [31m-[0m[0m unique_id   = "AIPAYE7LHJTDDJMSW3PC7" [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[4].aws_iam_role.raft_ssm[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_role" "raft_ssm" {
+      [31m-[0m[0m arn                   = "arn:aws:iam::560449670342:role/sameregi6865-raft-quic-same-ssm-node5" [90m-> null[0m[0m
+      [31m-[0m[0m assume_role_policy    = jsonencode(
+            {
+              [31m-[0m[0m Statement = [
+                  [31m-[0m[0m {
+                      [31m-[0m[0m Action    = "sts:AssumeRole"
+                      [31m-[0m[0m Effect    = "Allow"
+                      [31m-[0m[0m Principal = {
+                          [31m-[0m[0m Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              [31m-[0m[0m Version   = "2012-10-17"
+            }
+        ) [90m-> null[0m[0m
+      [31m-[0m[0m create_date           = "2026-04-20T17:48:25Z" [90m-> null[0m[0m
+      [31m-[0m[0m force_detach_policies = false [90m-> null[0m[0m
+      [31m-[0m[0m id                    = "sameregi6865-raft-quic-same-ssm-node5" [90m-> null[0m[0m
+      [31m-[0m[0m managed_policy_arns   = [
+          [31m-[0m[0m "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m max_session_duration  = 3600 [90m-> null[0m[0m
+      [31m-[0m[0m name                  = "sameregi6865-raft-quic-same-ssm-node5" [90m-> null[0m[0m
+      [31m-[0m[0m path                  = "/" [90m-> null[0m[0m
+      [31m-[0m[0m tags                  = {
+          [31m-[0m[0m "Node"    = "node5"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all              = {
+          [31m-[0m[0m "Node"    = "node5"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m unique_id             = "AROAYE7LHJTDIWLJW43CM" [90m-> null[0m[0m
+        [90m# (3 unchanged attributes hidden)[0m[0m
+    }
+
+[1m  # module.node[4].aws_iam_role_policy_attachment.ssm_core[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_iam_role_policy_attachment" "ssm_core" {
+      [31m-[0m[0m id         = "sameregi6865-raft-quic-same-ssm-node5-20260420174827538000000001" [90m-> null[0m[0m
+      [31m-[0m[0m policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" [90m-> null[0m[0m
+      [31m-[0m[0m role       = "sameregi6865-raft-quic-same-ssm-node5" [90m-> null[0m[0m
+    }
+
+[1m  # module.node[4].aws_instance.node[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_instance" "node" {
+      [31m-[0m[0m ami                                  = "ami-0102a36b3e9d5e4df" [90m-> null[0m[0m
+      [31m-[0m[0m arn                                  = "arn:aws:ec2:us-east-1:560449670342:instance/i-026ba331ba0c69ca4" [90m-> null[0m[0m
+      [31m-[0m[0m associate_public_ip_address          = true [90m-> null[0m[0m
+      [31m-[0m[0m availability_zone                    = "us-east-1d" [90m-> null[0m[0m
+      [31m-[0m[0m cpu_core_count                       = 1 [90m-> null[0m[0m
+      [31m-[0m[0m cpu_threads_per_core                 = 2 [90m-> null[0m[0m
+      [31m-[0m[0m disable_api_stop                     = false [90m-> null[0m[0m
+      [31m-[0m[0m disable_api_termination              = false [90m-> null[0m[0m
+      [31m-[0m[0m ebs_optimized                        = false [90m-> null[0m[0m
+      [31m-[0m[0m get_password_data                    = false [90m-> null[0m[0m
+      [31m-[0m[0m hibernation                          = false [90m-> null[0m[0m
+      [31m-[0m[0m iam_instance_profile                 = "sameregi6865-raft-quic-same-ssm-node5" [90m-> null[0m[0m
+      [31m-[0m[0m id                                   = "i-026ba331ba0c69ca4" [90m-> null[0m[0m
+      [31m-[0m[0m instance_initiated_shutdown_behavior = "stop" [90m-> null[0m[0m
+      [31m-[0m[0m instance_state                       = "running" [90m-> null[0m[0m
+      [31m-[0m[0m instance_type                        = "t3.micro" [90m-> null[0m[0m
+      [31m-[0m[0m ipv6_address_count                   = 0 [90m-> null[0m[0m
+      [31m-[0m[0m ipv6_addresses                       = [] [90m-> null[0m[0m
+      [31m-[0m[0m key_name                             = "sameregi6865-raft-quic-same-node5" [90m-> null[0m[0m
+      [31m-[0m[0m monitoring                           = false [90m-> null[0m[0m
+      [31m-[0m[0m placement_partition_number           = 0 [90m-> null[0m[0m
+      [31m-[0m[0m primary_network_interface_id         = "eni-004d51e8936fcfda8" [90m-> null[0m[0m
+      [31m-[0m[0m private_dns                          = "ip-172-31-41-119.ec2.internal" [90m-> null[0m[0m
+      [31m-[0m[0m private_ip                           = "172.31.41.119" [90m-> null[0m[0m
+      [31m-[0m[0m public_dns                           = "ec2-54-198-130-65.compute-1.amazonaws.com" [90m-> null[0m[0m
+      [31m-[0m[0m public_ip                            = "54.198.130.65" [90m-> null[0m[0m
+      [31m-[0m[0m secondary_private_ips                = [] [90m-> null[0m[0m
+      [31m-[0m[0m security_groups                      = [
+          [31m-[0m[0m "sameregi6865-raft-quic-node5",
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m source_dest_check                    = true [90m-> null[0m[0m
+      [31m-[0m[0m subnet_id                            = "subnet-055764690b8558cd1" [90m-> null[0m[0m
+      [31m-[0m[0m tags                                 = {
+          [31m-[0m[0m "Name"    = "sameregi6865-raft-quic-node5"
+          [31m-[0m[0m "Node"    = "node5"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all                             = {
+          [31m-[0m[0m "Name"    = "sameregi6865-raft-quic-node5"
+          [31m-[0m[0m "Node"    = "node5"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tenancy                              = "default" [90m-> null[0m[0m
+      [31m-[0m[0m user_data_replace_on_change          = false [90m-> null[0m[0m
+      [31m-[0m[0m vpc_security_group_ids               = [
+          [31m-[0m[0m "sg-0594e4986f8fc212f",
+        ] [90m-> null[0m[0m
+        [90m# (6 unchanged attributes hidden)[0m[0m
+
+      [31m-[0m[0m capacity_reservation_specification {
+          [31m-[0m[0m capacity_reservation_preference = "open" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m cpu_options {
+          [31m-[0m[0m core_count       = 1 [90m-> null[0m[0m
+          [31m-[0m[0m threads_per_core = 2 [90m-> null[0m[0m
+            [90m# (1 unchanged attribute hidden)[0m[0m
+        }
+
+      [31m-[0m[0m credit_specification {
+          [31m-[0m[0m cpu_credits = "unlimited" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m enclave_options {
+          [31m-[0m[0m enabled = false [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m maintenance_options {
+          [31m-[0m[0m auto_recovery = "default" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m metadata_options {
+          [31m-[0m[0m http_endpoint               = "enabled" [90m-> null[0m[0m
+          [31m-[0m[0m http_protocol_ipv6          = "disabled" [90m-> null[0m[0m
+          [31m-[0m[0m http_put_response_hop_limit = 2 [90m-> null[0m[0m
+          [31m-[0m[0m http_tokens                 = "required" [90m-> null[0m[0m
+          [31m-[0m[0m instance_metadata_tags      = "disabled" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m private_dns_name_options {
+          [31m-[0m[0m enable_resource_name_dns_a_record    = false [90m-> null[0m[0m
+          [31m-[0m[0m enable_resource_name_dns_aaaa_record = false [90m-> null[0m[0m
+          [31m-[0m[0m hostname_type                        = "ip-name" [90m-> null[0m[0m
+        }
+
+      [31m-[0m[0m root_block_device {
+          [31m-[0m[0m delete_on_termination = true [90m-> null[0m[0m
+          [31m-[0m[0m device_name           = "/dev/xvda" [90m-> null[0m[0m
+          [31m-[0m[0m encrypted             = false [90m-> null[0m[0m
+          [31m-[0m[0m iops                  = 3000 [90m-> null[0m[0m
+          [31m-[0m[0m tags                  = {} [90m-> null[0m[0m
+          [31m-[0m[0m tags_all              = {} [90m-> null[0m[0m
+          [31m-[0m[0m throughput            = 125 [90m-> null[0m[0m
+          [31m-[0m[0m volume_id             = "vol-0e2bd9bd7bf9de262" [90m-> null[0m[0m
+          [31m-[0m[0m volume_size           = 30 [90m-> null[0m[0m
+          [31m-[0m[0m volume_type           = "gp3" [90m-> null[0m[0m
+            [90m# (1 unchanged attribute hidden)[0m[0m
+        }
+    }
+
+[1m  # module.node[4].aws_key_pair.raft[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_key_pair" "raft" {
+      [31m-[0m[0m arn             = "arn:aws:ec2:us-east-1:560449670342:key-pair/sameregi6865-raft-quic-same-node5" [90m-> null[0m[0m
+      [31m-[0m[0m fingerprint     = "ab:f2:8f:6a:0e:d9:ff:84:f5:f7:53:d7:ac:64:d6:6c" [90m-> null[0m[0m
+      [31m-[0m[0m id              = "sameregi6865-raft-quic-same-node5" [90m-> null[0m[0m
+      [31m-[0m[0m key_name        = "sameregi6865-raft-quic-same-node5" [90m-> null[0m[0m
+      [31m-[0m[0m key_pair_id     = "key-02c4f7c7cd37729cf" [90m-> null[0m[0m
+      [31m-[0m[0m key_type        = "rsa" [90m-> null[0m[0m
+      [31m-[0m[0m public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDA0JdizYJBp/CWaQoxZfW0nheVvHGNTCDqYxdnQdOe3U3KZzIuvXtnx/wTyun9CKCfdfWThXoAoieOOnjVMIPVxvq6MhRLctdoqJD9YAIxHUuMuHjEbXb0Y1ssdYg+h4u4Vc/mfc4fcmSNr5tJnMZs62P5t14qOhu1ufOMmEdlx71+CEi2Fzlo/GH/JeLRpOHSJu2NjxdLSRS5ErmvtCi/VLlvifJlgii5IjNkTxg2Zv8FZ4IAKzy3BRb1DDRRLGoVxxhIjHJxeNe3yWQtj2sNZD1lO61dO009ovOYMImdKx7jFPXl7H5S8hRl3jMTtLft5JIRV46DQw1M36ctKIcrxtbky9uVg2sgFDnKG3tuWWuEGLqhZju/woH4MMo7iTi/oKii9742kQXDnDPXWL3NRjg9arrL+O4fTf2IoQgtAyOVMnKLQ44yCFsa0vnrqO4lOCXu3pnFgLvgd9ouwAvEpRYfTMZilO71WZ2i4+Uk8acZFzxb5rlwhEckwUAt5nAqoZnD9n6tklLwq7PAHdMAJs0VohJcg4TqIXjGai7SazgQcrGgCDPVjVKw+P8sgX2zIVi1cn9Iw21p56/Zfeqn/Ek9+r9zeiNmEjYj/gXwhwQwJeg+C0hm3auEv9qsykrLdPS2Khh1VBR44yhq47bJ/qBc+N7AyJxZleWcI9fObQ==" [90m-> null[0m[0m
+      [31m-[0m[0m tags            = {
+          [31m-[0m[0m "Node"    = "node5"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all        = {
+          [31m-[0m[0m "Node"    = "node5"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1m  # module.node[4].aws_security_group.raft[0m will be [1m[31mdestroyed[0m
+[0m  [31m-[0m[0m resource "aws_security_group" "raft" {
+      [31m-[0m[0m arn                    = "arn:aws:ec2:us-east-1:560449670342:security-group/sg-0594e4986f8fc212f" [90m-> null[0m[0m
+      [31m-[0m[0m description            = "Raft-over-QUIC cluster node node5" [90m-> null[0m[0m
+      [31m-[0m[0m egress                 = [
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 0
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "-1"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 0
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m id                     = "sg-0594e4986f8fc212f" [90m-> null[0m[0m
+      [31m-[0m[0m ingress                = [
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 22
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 22
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 7001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "udp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 7001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 8001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 8001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+          [31m-[0m[0m {
+              [31m-[0m[0m cidr_blocks      = [
+                  [31m-[0m[0m "0.0.0.0/0",
+                ]
+              [31m-[0m[0m from_port        = 9001
+              [31m-[0m[0m ipv6_cidr_blocks = []
+              [31m-[0m[0m prefix_list_ids  = []
+              [31m-[0m[0m protocol         = "tcp"
+              [31m-[0m[0m security_groups  = []
+              [31m-[0m[0m self             = false
+              [31m-[0m[0m to_port          = 9001
+                [90m# (1 unchanged attribute hidden)[0m[0m
+            },
+        ] [90m-> null[0m[0m
+      [31m-[0m[0m name                   = "sameregi6865-raft-quic-node5" [90m-> null[0m[0m
+      [31m-[0m[0m owner_id               = "560449670342" [90m-> null[0m[0m
+      [31m-[0m[0m revoke_rules_on_delete = false [90m-> null[0m[0m
+      [31m-[0m[0m tags                   = {
+          [31m-[0m[0m "Node"    = "node5"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m tags_all               = {
+          [31m-[0m[0m "Node"    = "node5"
+          [31m-[0m[0m "Project" = "raft-quic"
+        } [90m-> null[0m[0m
+      [31m-[0m[0m vpc_id                 = "vpc-0d14d4388abbe65e8" [90m-> null[0m[0m
+        [90m# (1 unchanged attribute hidden)[0m[0m
+    }
+
+[1mPlan:[0m [0m0 to add, 0 to change, 32 to destroy.
+
+Changes to Outputs:
+  [31m-[0m[0m instance_ids  = [
+      [31m-[0m[0m "i-0953b6d13b6835f2e",
+      [31m-[0m[0m "i-0acd86d14485cae31",
+      [31m-[0m[0m "i-0dc7c548036432aa6",
+      [31m-[0m[0m "i-07ae9edd0e64a7e75",
+      [31m-[0m[0m "i-026ba331ba0c69ca4",
+    ] [90m-> null[0m[0m
+  [31m-[0m[0m node_ids      = [
+      [31m-[0m[0m "node1",
+      [31m-[0m[0m "node2",
+      [31m-[0m[0m "node3",
+      [31m-[0m[0m "node4",
+      [31m-[0m[0m "node5",
+    ] [90m-> null[0m[0m
+  [31m-[0m[0m node_ips      = [
+      [31m-[0m[0m "100.30.199.11",
+      [31m-[0m[0m "54.242.97.192",
+      [31m-[0m[0m "54.84.81.14",
+      [31m-[0m[0m "32.192.93.252",
+      [31m-[0m[0m "54.198.130.65",
+    ] [90m-> null[0m[0m
+  [31m-[0m[0m region_labels = [
+      [31m-[0m[0m "us-east-1",
+      [31m-[0m[0m "us-east-1",
+      [31m-[0m[0m "us-east-1",
+      [31m-[0m[0m "us-east-1",
+      [31m-[0m[0m "us-east-1",
+    ] [90m-> null[0m[0m
+  [31m-[0m[0m scenario      = "same-region" [90m-> null[0m[0m
+  [31m-[0m[0m ssh_key_file  = "./raft-key.pem" [90m-> null[0m[0m
+  [31m-[0m[0m ssh_user      = "ec2-user" [90m-> null[0m[0m
+[0m[1mlocal_sensitive_file.ssh_key: Destroying... [id=7d7d5ea56d71e1e7e990f4736c98087e3dffd019][0m[0m
+[0m[1mlocal_sensitive_file.ssh_key: Destruction complete after 0s[0m
+[0m[1mmodule.node[4].aws_iam_role_policy_attachment.ssm_core: Destroying... [id=sameregi6865-raft-quic-same-ssm-node5-20260420174827538000000001][0m[0m
+[0m[1mmodule.node[1].aws_iam_role_policy_attachment.ssm_core: Destroying... [id=sameregi6865-raft-quic-same-ssm-node2-20260420174827751300000005][0m[0m
+[0m[1mmodule.node[0].aws_iam_role_policy_attachment.ssm_core: Destroying... [id=sameregi6865-raft-quic-same-ssm-node1-20260420174827577400000002][0m[0m
+[0m[1mmodule.node[2].aws_iam_role_policy_attachment.ssm_core: Destroying... [id=sameregi6865-raft-quic-same-ssm-node3-20260420174827655700000004][0m[0m
+[0m[1mmodule.node[3].aws_iam_role_policy_attachment.ssm_core: Destroying... [id=sameregi6865-raft-quic-same-ssm-node4-20260420174827613500000003][0m[0m
+[0m[1mmodule.node[1].aws_instance.node: Destroying... [id=i-0acd86d14485cae31][0m[0m
+[0m[1mmodule.node[4].aws_instance.node: Destroying... [id=i-026ba331ba0c69ca4][0m[0m
+[0m[1mmodule.node[0].aws_instance.node: Destroying... [id=i-0953b6d13b6835f2e][0m[0m
+[0m[1mmodule.node[2].aws_instance.node: Destroying... [id=i-0dc7c548036432aa6][0m[0m
+[0m[1mmodule.node[3].aws_instance.node: Destroying... [id=i-07ae9edd0e64a7e75][0m[0m
+[0m[1mmodule.node[4].aws_iam_role_policy_attachment.ssm_core: Destruction complete after 1s[0m
+[0m[1mmodule.node[1].aws_iam_role_policy_attachment.ssm_core: Destruction complete after 1s[0m
+[0m[1mmodule.node[0].aws_iam_role_policy_attachment.ssm_core: Destruction complete after 1s[0m
+[0m[1mmodule.node[3].aws_iam_role_policy_attachment.ssm_core: Destruction complete after 1s[0m
+[0m[1mmodule.node[2].aws_iam_role_policy_attachment.ssm_core: Destruction complete after 1s[0m
+[0m[1mmodule.node[1].aws_instance.node: Still destroying... [id=i-0acd86d14485cae31, 00m10s elapsed][0m[0m
+[0m[1mmodule.node[0].aws_instance.node: Still destroying... [id=i-0953b6d13b6835f2e, 00m10s elapsed][0m[0m
+[0m[1mmodule.node[4].aws_instance.node: Still destroying... [id=i-026ba331ba0c69ca4, 00m10s elapsed][0m[0m
+[0m[1mmodule.node[2].aws_instance.node: Still destroying... [id=i-0dc7c548036432aa6, 00m10s elapsed][0m[0m
+[0m[1mmodule.node[3].aws_instance.node: Still destroying... [id=i-07ae9edd0e64a7e75, 00m10s elapsed][0m[0m
+[0m[1mmodule.node[4].aws_instance.node: Still destroying... [id=i-026ba331ba0c69ca4, 00m20s elapsed][0m[0m
+[0m[1mmodule.node[0].aws_instance.node: Still destroying... [id=i-0953b6d13b6835f2e, 00m20s elapsed][0m[0m
+[0m[1mmodule.node[1].aws_instance.node: Still destroying... [id=i-0acd86d14485cae31, 00m20s elapsed][0m[0m
+[0m[1mmodule.node[2].aws_instance.node: Still destroying... [id=i-0dc7c548036432aa6, 00m20s elapsed][0m[0m
+[0m[1mmodule.node[3].aws_instance.node: Still destroying... [id=i-07ae9edd0e64a7e75, 00m20s elapsed][0m[0m
+[0m[1mmodule.node[2].aws_instance.node: Destruction complete after 22s[0m
+[0m[1mmodule.node[2].aws_key_pair.raft: Destroying... [id=sameregi6865-raft-quic-same-node3][0m[0m
+[0m[1mmodule.node[2].aws_iam_instance_profile.raft_ssm: Destroying... [id=sameregi6865-raft-quic-same-ssm-node3][0m[0m
+[0m[1mmodule.node[2].aws_security_group.raft: Destroying... [id=sg-0ce5c5c8f4f18824c][0m[0m
+[0m[1mmodule.node[2].aws_key_pair.raft: Destruction complete after 0s[0m
+[0m[1mmodule.node[2].aws_iam_instance_profile.raft_ssm: Destruction complete after 0s[0m
+[0m[1mmodule.node[2].aws_iam_role.raft_ssm: Destroying... [id=sameregi6865-raft-quic-same-ssm-node3][0m[0m
+[0m[1mmodule.node[2].aws_security_group.raft: Destruction complete after 1s[0m
+[0m[1mmodule.node[2].aws_iam_role.raft_ssm: Destruction complete after 1s[0m
+[0m[1mmodule.node[1].aws_instance.node: Still destroying... [id=i-0acd86d14485cae31, 00m30s elapsed][0m[0m
+[0m[1mmodule.node[4].aws_instance.node: Still destroying... [id=i-026ba331ba0c69ca4, 00m30s elapsed][0m[0m
+[0m[1mmodule.node[0].aws_instance.node: Still destroying... [id=i-0953b6d13b6835f2e, 00m30s elapsed][0m[0m
+[0m[1mmodule.node[3].aws_instance.node: Still destroying... [id=i-07ae9edd0e64a7e75, 00m30s elapsed][0m[0m
+[0m[1mmodule.node[4].aws_instance.node: Destruction complete after 32s[0m
+[0m[1mmodule.node[0].aws_instance.node: Destruction complete after 32s[0m
+[0m[1mmodule.node[4].aws_iam_instance_profile.raft_ssm: Destroying... [id=sameregi6865-raft-quic-same-ssm-node5][0m[0m
+[0m[1mmodule.node[4].aws_key_pair.raft: Destroying... [id=sameregi6865-raft-quic-same-node5][0m[0m
+[0m[1mmodule.node[4].aws_security_group.raft: Destroying... [id=sg-0594e4986f8fc212f][0m[0m
+[0m[1mmodule.node[0].aws_key_pair.raft: Destroying... [id=sameregi6865-raft-quic-same-node1][0m[0m
+[0m[1mmodule.node[0].aws_iam_instance_profile.raft_ssm: Destroying... [id=sameregi6865-raft-quic-same-ssm-node1][0m[0m
+[0m[1mmodule.node[0].aws_security_group.raft: Destroying... [id=sg-0b45d6133379b8dff][0m[0m
+[0m[1mmodule.node[1].aws_instance.node: Destruction complete after 32s[0m
+[0m[1mmodule.node[1].aws_iam_instance_profile.raft_ssm: Destroying... [id=sameregi6865-raft-quic-same-ssm-node2][0m[0m
+[0m[1mmodule.node[1].aws_key_pair.raft: Destroying... [id=sameregi6865-raft-quic-same-node2][0m[0m
+[0m[1mmodule.node[1].aws_security_group.raft: Destroying... [id=sg-0d023f6d529cccd93][0m[0m
+[0m[1mmodule.node[4].aws_key_pair.raft: Destruction complete after 1s[0m
+[0m[1mmodule.node[0].aws_key_pair.raft: Destruction complete after 1s[0m
+[0m[1mmodule.node[4].aws_iam_instance_profile.raft_ssm: Destruction complete after 1s[0m
+[0m[1mmodule.node[4].aws_iam_role.raft_ssm: Destroying... [id=sameregi6865-raft-quic-same-ssm-node5][0m[0m
+[0m[1mmodule.node[0].aws_iam_instance_profile.raft_ssm: Destruction complete after 1s[0m
+[0m[1mmodule.node[0].aws_iam_role.raft_ssm: Destroying... [id=sameregi6865-raft-quic-same-ssm-node1][0m[0m
+[0m[1mmodule.node[1].aws_iam_instance_profile.raft_ssm: Destruction complete after 1s[0m
+[0m[1mmodule.node[1].aws_iam_role.raft_ssm: Destroying... [id=sameregi6865-raft-quic-same-ssm-node2][0m[0m
+[0m[1mmodule.node[1].aws_key_pair.raft: Destruction complete after 1s[0m
+[0m[1mmodule.node[4].aws_iam_role.raft_ssm: Destruction complete after 1s[0m
+[0m[1mmodule.node[0].aws_security_group.raft: Destruction complete after 2s[0m
+[0m[1mmodule.node[0].aws_iam_role.raft_ssm: Destruction complete after 1s[0m
+[0m[1mmodule.node[4].aws_security_group.raft: Destruction complete after 2s[0m
+[0m[1mmodule.node[1].aws_iam_role.raft_ssm: Destruction complete after 1s[0m
+[0m[1mmodule.node[1].aws_security_group.raft: Destruction complete after 2s[0m
+[0m[1mmodule.node[3].aws_instance.node: Still destroying... [id=i-07ae9edd0e64a7e75, 00m40s elapsed][0m[0m
+[0m[1mmodule.node[3].aws_instance.node: Destruction complete after 42s[0m
+[0m[1mmodule.node[3].aws_key_pair.raft: Destroying... [id=sameregi6865-raft-quic-same-node4][0m[0m
+[0m[1mmodule.node[3].aws_iam_instance_profile.raft_ssm: Destroying... [id=sameregi6865-raft-quic-same-ssm-node4][0m[0m
+[0m[1mmodule.node[3].aws_security_group.raft: Destroying... [id=sg-06056527f590e1f00][0m[0m
+[0m[1mmodule.node[3].aws_key_pair.raft: Destruction complete after 0s[0m
+[0m[1mtls_private_key.ssh: Destroying... [id=0b03073e5837a8e0d7873475844cf82da973a42a][0m[0m
+[0m[1mtls_private_key.ssh: Destruction complete after 0s[0m
+[0m[1mmodule.node[3].aws_iam_instance_profile.raft_ssm: Destruction complete after 0s[0m
+[0m[1mmodule.node[3].aws_iam_role.raft_ssm: Destroying... [id=sameregi6865-raft-quic-same-ssm-node4][0m[0m
+[0m[1mmodule.node[3].aws_security_group.raft: Destruction complete after 1s[0m
+[0m[1mmodule.node[3].aws_iam_role.raft_ssm: Destruction complete after 1s[0m
+[0m[1m[32m
+Destroy complete! Resources: 32 destroyed.[0m
+[+] 集群已销毁
+[!] 无可保存结果
+[!] 无可生成报告的数据
+
+[+] 所有测试完成，结果保存到 results/full-benchmark-20260421_014752/results/same-region_5nodes_20260421_014754

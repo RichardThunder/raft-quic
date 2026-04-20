@@ -18,13 +18,16 @@ import (
 const (
 	rpcTimeout   = 10 * time.Second
 	maxIdleConns = 100
+	consumeQueue = 1024
 )
 
 // quicConfig returns the shared QUIC configuration used by both dial and listen.
 func quicConfig() *quic.Config {
 	return &quic.Config{
-		MaxIdleTimeout:  30 * time.Second,
-		KeepAlivePeriod: 10 * time.Second,
+		MaxIdleTimeout:        30 * time.Second,
+		KeepAlivePeriod:       10 * time.Second,
+		MaxIncomingStreams:    1024,
+		MaxIncomingUniStreams: -1, // disable unidirectional streams
 	}
 }
 
@@ -77,7 +80,7 @@ func NewQuicTransport(bindAddr string, advertiseAddr string, serverTLS *tls.Conf
 		clientTLS:  clientTLS,
 		listener:   listener,
 		peers:      make(map[raft.ServerAddress]*peerConn),
-		consumeCh:  make(chan raft.RPC, 16),
+		consumeCh:  make(chan raft.RPC, consumeQueue),
 		shutdownCh: make(chan struct{}),
 	}
 
@@ -366,7 +369,10 @@ func (t *QuicTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddr
 		return fmt.Errorf("stream snapshot data: %w", err)
 	}
 	// Signal EOF on the write side so the receiver can start reading the response.
-	// For QUIC streams, Close() sends FIN on the write side.
+	// In quic-go, Close() on a stream sends FIN for writes while reads can continue.
+	if err := stream.Close(); err != nil {
+		return fmt.Errorf("finish snapshot stream: %w", err)
+	}
 
 	_, respBody, err := readFrame(stream)
 	if err != nil {

@@ -141,21 +141,41 @@ init_output_dir() {
 }
 
 # 函数: 构建Linux二进制文件
+binary_needs_rebuild() {
+    local binary="$1"
+
+    if [ ! -f "$binary" ]; then
+        return 0
+    fi
+
+    if find . -type f -name "*.go" \
+        -not -path "./.git/*" \
+        -not -path "./results/*" \
+        -newer "$binary" \
+        -print -quit | grep -q .; then
+        return 0
+    fi
+
+    return 1
+}
+
 build_binaries() {
     log_info "构建Linux二进制文件..."
 
-    if [ ! -f "raftd-linux-amd64" ]; then
+    if binary_needs_rebuild "raftd-linux-amd64"; then
+        log_info "检测到 raftd-linux-amd64 过期或缺失，重新构建..."
         GOOS=linux GOARCH=amd64 go build -o raftd-linux-amd64 ./cmd/raftd
         log_success "raftd 构建完成"
     else
-        log_success "raftd 二进制已存在"
+        log_success "raftd 二进制已是最新"
     fi
 
-    if [ ! -f "cmd/tcp-server/tcp-server-linux-amd64" ]; then
+    if binary_needs_rebuild "cmd/tcp-server/tcp-server-linux-amd64"; then
+        log_info "检测到 tcp-server-linux-amd64 过期或缺失，重新构建..."
         GOOS=linux GOARCH=amd64 go build -o cmd/tcp-server/tcp-server-linux-amd64 ./cmd/tcp-server
         log_success "tcp-server 构建完成"
     else
-        log_success "tcp-server 二进制已存在"
+        log_success "tcp-server 二进制已是最新"
     fi
 }
 
@@ -174,12 +194,23 @@ verify_aws_credentials() {
 sanitize_name_prefix() {
     local raw="$1"
     local cleaned
+    local base
+    local checksum
+    local suffix
+
     cleaned=$(echo "$raw" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')
-    cleaned="${cleaned:0:12}"
-    if [ -z "$cleaned" ]; then
-        cleaned="rq$(date +%s)"
+
+    # Keep prefix short for IAM/SG naming limits, but stable+unique per test_id.
+    base="${cleaned:0:8}"
+    if [ -z "$base" ]; then
+        base="rq$(date +%s)"
+        base="${base:0:8}"
     fi
-    echo "$cleaned"
+
+    checksum=$(printf "%s" "$raw" | cksum | awk '{print $1}')
+    suffix=$(printf "%08x" "$checksum")
+
+    echo "${base}${suffix:0:4}"
 }
 
 prepare_terraform_workdir() {
@@ -305,6 +336,10 @@ run_test_suite() {
 
     if [ "$SKIP_QUIC" = true ]; then
         bench_args="$bench_args --skip-quic"
+    fi
+
+    if [ "$MONITOR" = true ]; then
+        bench_args="$bench_args --monitor"
     fi
 
     # 运行基准测试

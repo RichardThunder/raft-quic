@@ -20,7 +20,7 @@ import (
 type Config struct {
 	// NodeID is the unique identifier for this node.
 	NodeID string
-	// BindAddr is the QUIC listen address (host:port).
+	// BindAddr is the listen address (host:port) used when Transport is nil (QUIC default).
 	BindAddr string
 	// AdvertiseAddr is the address advertised to peers. Defaults to BindAddr.
 	// Set this when the bind address is not reachable by other nodes (e.g. 0.0.0.0 in Docker).
@@ -38,6 +38,12 @@ type Config struct {
 	// ElectionTimeout overrides the default 200 ms. Should be ≥ 2×HeartbeatTimeout.
 	ElectionTimeout time.Duration
 
+	// Transport is the Raft transport to use. When non-nil, BindAddr and
+	// AdvertiseAddr are ignored for transport creation (the caller is responsible
+	// for configuring the transport's listen address). If nil, a QuicTransport is
+	// created from BindAddr/AdvertiseAddr.
+	Transport raft.Transport
+
 	Logger hclog.Logger
 }
 
@@ -45,7 +51,7 @@ type Config struct {
 type Node struct {
 	Raft      *raft.Raft
 	FSM       *fsm.KVStateMachine
-	Transport *transport.QuicTransport
+	Transport raft.Transport
 	logger    hclog.Logger
 
 	// Metrics
@@ -80,16 +86,20 @@ func New(cfg Config) (*Node, error) {
 		advertise = cfg.BindAddr
 	}
 
-	// Generate TLS config.
-	serverTLS, clientTLS, err := transport.GenerateTLSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("generate tls: %w", err)
-	}
-
-	// Create transport.
-	qt, err := transport.NewQuicTransport(cfg.BindAddr, advertise, serverTLS, clientTLS, logger)
-	if err != nil {
-		return nil, fmt.Errorf("create transport: %w", err)
+	// Create transport (caller-supplied or QUIC default).
+	var tr raft.Transport
+	if cfg.Transport != nil {
+		tr = cfg.Transport
+	} else {
+		serverTLS, clientTLS, err := transport.GenerateTLSConfig()
+		if err != nil {
+			return nil, fmt.Errorf("generate tls: %w", err)
+		}
+		qt, err := transport.NewQuicTransport(cfg.BindAddr, advertise, serverTLS, clientTLS, logger)
+		if err != nil {
+			return nil, fmt.Errorf("create transport: %w", err)
+		}
+		tr = qt
 	}
 
 	// Create FSM.
@@ -102,13 +112,14 @@ func New(cfg Config) (*Node, error) {
 	// Create snapshot store.
 	var snapshotStore raft.SnapshotStore
 	if cfg.DataDir != "" {
-		if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
-			return nil, fmt.Errorf("mkdir %s: %w", cfg.DataDir, err)
+		var ssErr error
+		if err2 := os.MkdirAll(cfg.DataDir, 0755); err2 != nil {
+			return nil, fmt.Errorf("mkdir %s: %w", cfg.DataDir, err2)
 		}
-		snapshotStore, err = raft.NewFileSnapshotStore(
+		snapshotStore, ssErr = raft.NewFileSnapshotStore(
 			filepath.Join(cfg.DataDir, "snapshots"), 2, os.Stderr)
-		if err != nil {
-			return nil, fmt.Errorf("snapshot store: %w", err)
+		if ssErr != nil {
+			return nil, fmt.Errorf("snapshot store: %w", ssErr)
 		}
 	} else {
 		snapshotStore = raft.NewInmemSnapshotStore()
@@ -133,9 +144,15 @@ func New(cfg Config) (*Node, error) {
 	raftCfg.Logger = logger
 
 	// Create Raft.
-	r, err := raft.NewRaft(raftCfg, kv, logStore, stableStore, snapshotStore, qt)
+	closeTransport := func() {
+		if c, ok := tr.(interface{ Close() error }); ok {
+			c.Close()
+		}
+	}
+
+	r, err := raft.NewRaft(raftCfg, kv, logStore, stableStore, snapshotStore, tr)
 	if err != nil {
-		qt.Close()
+		closeTransport()
 		return nil, fmt.Errorf("new raft: %w", err)
 	}
 
@@ -151,7 +168,7 @@ func New(cfg Config) (*Node, error) {
 		}
 		future := r.BootstrapCluster(configuration)
 		if err := future.Error(); err != nil {
-			qt.Close()
+			closeTransport()
 			return nil, fmt.Errorf("bootstrap: %w", err)
 		}
 		logger.Info("cluster bootstrapped")
@@ -160,7 +177,7 @@ func New(cfg Config) (*Node, error) {
 	node := &Node{
 		Raft:                   r,
 		FSM:                    kv,
-		Transport:              qt,
+		Transport:              tr,
 		logger:                 logger,
 		lastEntriesReplication: time.Now(),
 		lastReplicatedIndex:    r.LastIndex(),
@@ -194,7 +211,10 @@ func (n *Node) Shutdown() error {
 	if err := future.Error(); err != nil {
 		return err
 	}
-	return n.Transport.Close()
+	if c, ok := n.Transport.(interface{ Close() error }); ok {
+		return c.Close()
+	}
+	return nil
 }
 
 // monitorMetrics periodically checks for Raft state changes and updates metrics
