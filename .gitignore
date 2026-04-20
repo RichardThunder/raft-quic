@@ -1,0 +1,15 @@
+# macOS metadata
+.DS_Store
+
+# Python cache artifacts
+__pycache__/
+*.py[cod]
+
+# Terraform local state and downloaded providers/modules
+**/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+
+# Local SSH key generated during Terraform deploy
+deploy/terraform/*/raft-key.pem
