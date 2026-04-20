@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	rpcTimeout    = 10 * time.Second
-	maxIdleConns  = 100
+	rpcTimeout   = 10 * time.Second
+	maxIdleConns = 100
 )
 
 // quicConfig returns the shared QUIC configuration used by both dial and listen.

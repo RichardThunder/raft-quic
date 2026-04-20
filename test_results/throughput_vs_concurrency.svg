@@ -1,0 +1,30 @@
+<svg width="900" height="550" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            body { font-family: Arial, sans-serif; }
+            .title { font-size: 18px; font-weight: bold; }
+            .label { font-size: 12px; }
+        </style>
+    </defs>
+
+    <!-- Background -->
+    <rect width="900" height="550" fill="white"/>
+
+    <!-- Title -->
+    <text x="450.0" y="30" font-size="18" font-weight="bold" text-anchor="middle">Write Throughput vs Concurrency</text>
+
+    <!-- Axes -->
+    <line x1="60" y1="490" x2="840"
+          y2="490" stroke="black" stroke-width="2"/>
+    <line x1="60" y1="60" x2="60" y2="490"
+          stroke="black" stroke-width="2"/>
+
+    <!-- Grid lines -->
+    <line x1="60" y1="440" x2="840"
+          y2="440" stroke="#ddd" stroke-width="1" stroke-dasharray="5,5"/>
+    <line x1="60" y1="390" x2="840"
+          y2="390" stroke="#ddd" stroke-width="1" stroke-dasharray="5,5"/>
+
+    <!-- Data and labels -->
+    <text x="50" y="495.0" font-size="10" text-anchor="end" >0</text><text x="50" y="411.1434591898168" font-size="10" text-anchor="end" >200</text><text x="50" y="327.2869183796336" font-size="10" text-anchor="end" >400</text><text x="50" y="243.43037756945043" font-size="10" text-anchor="end" >600</text><text x="50" y="159.57383675926724" font-size="10" text-anchor="end" >800</text><circle cx="60.0" cy="217.38238582609443" r="4" fill="#A23B72"/><text x="60.0" y="510" font-size="10" text-anchor="middle" >4</text><text x="60.0" y="202.38238582609443" font-size="9" text-anchor="middle" >650</text><circle cx="840.0" cy="135.4545454545455" r="4" fill="#A23B72"/><text x="840.0" y="510" font-size="10" text-anchor="middle" >8</text><text x="840.0" y="120.4545454545455" font-size="9" text-anchor="middle" >846</text><polyline points="60.0,217.38238582609443 840.0,135.4545454545455" fill="none" stroke="#2E86AB" stroke-width="2"/><text x="450.0" y="545" font-size="12" text-anchor="middle" font-weight='bold'>Concurrency Level</text><text x="20" y="60" font-size="12" text-anchor="middle" font-weight='bold'>Throughput (ops/sec)</text>
+</svg>

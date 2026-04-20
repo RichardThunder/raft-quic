@@ -209,7 +209,7 @@ func (s *server) handleJoin(w http.ResponseWriter, r *http.Request) {
 // handleStatus returns Raft state information as JSON.
 // GET /status
 func (s *server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	stats := s.node.Raft.Stats()
+	metrics := s.node.GetMetrics()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	json.NewEncoder(w).Encode(metrics)
 }

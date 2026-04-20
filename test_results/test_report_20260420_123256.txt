@@ -1,0 +1,18 @@
+╔════════════════════════════════════════════════════════════════╗
+║   Raft-over-QUIC Comprehensive Test Suite                      ║
+║   Date: Mon Apr 20 12:32:56 CST 2026                      ║
+╚════════════════════════════════════════════════════════════════╝
+
+[0;32m[PASS][0m Binary exists: /Users/richard/code/raft-quic/raftd
+/Users/richard/code/raft-quic/raftd: Mach-O 64-bit executable arm64
+[0;32m[PASS][0m Code formatting OK
+[0;32m[PASS][0m go vet passed
+Report saved to: /Users/richard/code/raft-quic/test_results/test_report_20260420_123256.txt
+Log saved to: /Users/richard/code/raft-quic/test_results/test_log_20260420_123256.log
+Results directory: /Users/richard/code/raft-quic/test_results
+
+✓ Build verification
+✓ Code quality checks
+⊘ Docker/benchmark tests skipped
+
+\033[0;32mTest suite completed!\033[0m

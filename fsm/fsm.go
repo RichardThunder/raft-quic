@@ -11,7 +11,7 @@ import (
 
 // Command is the operation applied to the KV store via Raft.
 type Command struct {
-	Op    string `json:"op"`    // "set" | "del"
+	Op    string `json:"op"` // "set" | "del"
 	Key   string `json:"key"`
 	Value string `json:"value,omitempty"`
 }

@@ -49,6 +49,13 @@ resource "aws_security_group" "raft" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+  # TCP baseline service API
+  ingress {
+    from_port   = 9001
+    to_port     = 9001
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
   # QUIC transport (UDP) — must explicitly allow UDP
   ingress {
     from_port   = 7001

@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	hclog "github.com/hashicorp/go-hclog"
@@ -44,6 +47,20 @@ type Node struct {
 	FSM       *fsm.KVStateMachine
 	Transport *transport.QuicTransport
 	logger    hclog.Logger
+
+	// Metrics
+	mu                     sync.RWMutex
+	lastLeaderID           raft.ServerAddress
+	lastState              raft.RaftState
+	leaderChanges          int64
+	electionTriggered      int64
+	lastElectionTime       time.Time
+	lastElectionDurationMs int64
+	heartbeatTimeouts      int64
+	lastHeartbeatTimeoutAt time.Time
+	lastEntriesReplication time.Time
+	lastReplicatedIndex    uint64
+	entriesPerSecond       float64
 }
 
 // New creates and starts a new Raft node.
@@ -140,12 +157,21 @@ func New(cfg Config) (*Node, error) {
 		logger.Info("cluster bootstrapped")
 	}
 
-	return &Node{
-		Raft:      r,
-		FSM:       kv,
-		Transport: qt,
-		logger:    logger,
-	}, nil
+	node := &Node{
+		Raft:                   r,
+		FSM:                    kv,
+		Transport:              qt,
+		logger:                 logger,
+		lastEntriesReplication: time.Now(),
+		lastReplicatedIndex:    r.LastIndex(),
+		lastState:              r.State(),
+		lastLeaderID:           r.Leader(),
+	}
+
+	// Start metrics monitoring goroutine
+	go node.monitorMetrics()
+
+	return node, nil
 }
 
 // JoinCluster asks the leader at leaderHTTP to add this node.
@@ -169,4 +195,105 @@ func (n *Node) Shutdown() error {
 		return err
 	}
 	return n.Transport.Close()
+}
+
+// monitorMetrics periodically checks for Raft state changes and updates metrics
+func (n *Node) monitorMetrics() {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		currentLeaderID := n.Raft.Leader()
+		currentState := n.Raft.State()
+		lastLogIdx := n.Raft.LastIndex()
+
+		n.mu.Lock()
+
+		// Track leader changes
+		if currentLeaderID != "" && n.lastLeaderID != "" && currentLeaderID != n.lastLeaderID {
+			atomic.AddInt64(&n.leaderChanges, 1)
+			n.logger.Info("leader changed", "old", n.lastLeaderID, "new", currentLeaderID)
+		}
+
+		// Track election transitions.
+		if currentState == raft.Candidate && n.lastState != raft.Candidate {
+			atomic.AddInt64(&n.electionTriggered, 1)
+			n.lastElectionTime = now
+			if n.lastState == raft.Follower {
+				atomic.AddInt64(&n.heartbeatTimeouts, 1)
+				n.lastHeartbeatTimeoutAt = now
+			}
+		}
+		if currentState == raft.Leader && n.lastState == raft.Candidate && !n.lastElectionTime.IsZero() {
+			n.lastElectionDurationMs = now.Sub(n.lastElectionTime).Milliseconds()
+		}
+
+		// Calculate entries replicated per second from last log index delta.
+		timeDelta := now.Sub(n.lastEntriesReplication).Seconds()
+		if timeDelta > 0 && lastLogIdx >= n.lastReplicatedIndex {
+			entriesDelta := lastLogIdx - n.lastReplicatedIndex
+			n.entriesPerSecond = float64(entriesDelta) / timeDelta
+			n.lastReplicatedIndex = lastLogIdx
+			n.lastEntriesReplication = now
+		}
+
+		n.lastLeaderID = currentLeaderID
+		n.lastState = currentState
+
+		n.mu.Unlock()
+	}
+}
+
+// Metrics holds extracted metrics from Raft state
+type Metrics struct {
+	IsLeader               bool    `json:"is_leader"`
+	LeaderID               string  `json:"leader_id"`
+	Term                   uint64  `json:"term"`
+	CommittedIndex         uint64  `json:"committed_index"`
+	LastApplied            uint64  `json:"last_applied"`
+	LastLogIndex           uint64  `json:"last_log_index"`
+	ReplicationLag         int64   `json:"replication_lag"`
+	PeersCount             int     `json:"peers_count"`
+	LeaderChanges          int64   `json:"leader_changes"`
+	ElectionTriggered      int64   `json:"election_triggered"`
+	LastElectionDurationMs int64   `json:"last_election_duration_ms"`
+	HeartbeatTimeouts      int64   `json:"heartbeat_timeouts"`
+	EntriesPerSecond       float64 `json:"entries_per_second"`
+}
+
+// GetMetrics returns current Raft metrics
+func (n *Node) GetMetrics() Metrics {
+	stats := n.Raft.Stats()
+
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	isLeader := n.Raft.State() == raft.Leader
+	leaderID := string(n.Raft.Leader())
+	term, _ := strconv.ParseUint(stats["term"], 10, 64)
+	lastLogIdx := n.Raft.LastIndex()
+	commitIdx := n.Raft.CommitIndex()
+	lastAppliedIdx := n.Raft.AppliedIndex()
+	numPeers, _ := strconv.Atoi(stats["num_peers"])
+	peersCount := numPeers + 1
+	if peersCount < 1 {
+		peersCount = 1
+	}
+
+	return Metrics{
+		IsLeader:               isLeader,
+		LeaderID:               leaderID,
+		Term:                   term,
+		CommittedIndex:         commitIdx,
+		LastApplied:            lastAppliedIdx,
+		LastLogIndex:           lastLogIdx,
+		ReplicationLag:         int64(lastLogIdx) - int64(commitIdx),
+		PeersCount:             peersCount,
+		LeaderChanges:          atomic.LoadInt64(&n.leaderChanges),
+		ElectionTriggered:      atomic.LoadInt64(&n.electionTriggered),
+		LastElectionDurationMs: n.lastElectionDurationMs,
+		HeartbeatTimeouts:      atomic.LoadInt64(&n.heartbeatTimeouts),
+		EntriesPerSecond:       n.entriesPerSecond,
+	}
 }
