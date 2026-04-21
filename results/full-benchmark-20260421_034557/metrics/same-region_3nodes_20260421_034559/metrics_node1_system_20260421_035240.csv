@@ -1,0 +1,5 @@
+cpu_usage_percent,memory_usage_percent,node,timestamp
+0,0,node1,2026-04-21T03:46:29.436201
+0,0,node1,2026-04-21T03:48:11.921225
+0,0,node1,2026-04-21T03:49:43.109009
+0,0,node1,2026-04-21T03:51:12.715248

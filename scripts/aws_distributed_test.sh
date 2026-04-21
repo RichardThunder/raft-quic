@@ -279,8 +279,15 @@ reap_finished_parallel_jobs() {
         fi
     done
 
-    ACTIVE_PIDS=("${remaining_pids[@]}")
-    ACTIVE_LABELS=("${remaining_labels[@]}")
+    ACTIVE_PIDS=()
+    ACTIVE_LABELS=()
+
+    if [ "${#remaining_pids[@]}" -gt 0 ]; then
+        ACTIVE_PIDS=("${remaining_pids[@]}")
+    fi
+    if [ "${#remaining_labels[@]}" -gt 0 ]; then
+        ACTIVE_LABELS=("${remaining_labels[@]}")
+    fi
 }
 
 wait_for_parallel_slot() {

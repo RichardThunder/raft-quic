@@ -1,0 +1,3 @@
+protocol,cluster_size,scenario,write_throughput,write_p50_ms,write_p95_ms,write_p99_ms,read_throughput,write_errors,write_error_503,write_error_500,write_error_timeout,write_error_other,write_retries,write_retry_recovered,read_errors,timestamp
+quic,3,same-region,1.6048365597020715,564.5329999970272,590.8138750091894,636.1932500003604,1.7800178255239811,0,0,0,0,0,15,15,0,2026-04-21T04:01:50.016302
+tcp,3,same-region,1.7731539853347973,558.9684579899767,588.1196250120411,598.8892910099821,1.7757512168324816,0,0,0,0,0,0,0,0,2026-04-21T04:13:58.975639

@@ -1,0 +1,65 @@
+======================================================================
+监控指标收集工具
+======================================================================
+节点: ['node1', 'node2', 'node3']
+采集间隔: 5s
+监控时长: 360s
+协议: ['quic', 'tcp']
+远程执行: SSM
+======================================================================
+
+[*] 启动监控线程...
+[+] 监控运行中... (Ctrl+C 中止)
+
+[*] 保存采集数据...
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node1_system_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node1_raft_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node1_network_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node1_quic_bench_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node1_tcp_bench_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node2_system_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node2_raft_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node2_network_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node2_quic_bench_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node2_tcp_bench_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node3_system_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node3_raft_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node3_network_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node3_quic_bench_20260421_035244.csv
+[+] 指标已保存: results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559/metrics_node3_tcp_bench_20260421_035244.csv
+
+======================================================================
+监控摘要统计
+======================================================================
+node1_system_cpu_usage_percent:
+  最小值: 0.00
+  最大值: 0.00
+  平均值: 0.00
+  样本数: 4
+node1_system_memory_usage_percent:
+  最小值: 0.00
+  最大值: 0.00
+  平均值: 0.00
+  样本数: 4
+node2_system_cpu_usage_percent:
+  最小值: 0.00
+  最大值: 0.00
+  平均值: 0.00
+  样本数: 4
+node2_system_memory_usage_percent:
+  最小值: 0.00
+  最大值: 0.00
+  平均值: 0.00
+  样本数: 4
+node3_system_cpu_usage_percent:
+  最小值: 0.00
+  最大值: 0.00
+  平均值: 0.00
+  样本数: 4
+node3_system_memory_usage_percent:
+  最小值: 0.00
+  最大值: 0.00
+  平均值: 0.00
+  样本数: 4
+
+[+] 监控完成，数据保存到 results/full-benchmark-20260421_034557/metrics/cross-region_3nodes_20260421_034559

@@ -112,10 +112,10 @@ go version
 ### Deploy
 
 ```bash
-# Same-region (3 nodes, ap-east-1 Hong Kong by default)
+# Same-region (3 nodes, us-east-1 by default)
 ./deploy/deploy.sh same-region
 
-# Cross-region (HK + US-East + EU-West) — uses extended Raft timeouts
+# Cross-region (us-east-1 + us-west-2 + eu-west-1) — uses extended Raft timeouts
 ./deploy/deploy.sh cross-region
 ```
 
@@ -162,8 +162,8 @@ Results are saved under `results/distributed_test_<timestamp>/`.
 ```bash
 # Generate 7 individual charts from a benchmark result directory
 conda run -n base python3 scripts/visualize_benchmark.py \
-  --results-dir results/full-benchmark-20260420_132814 \
-  --out-dir results/full-benchmark-20260420_132814/charts
+  --results-dir results/full-benchmark-20260421_034557 \
+  --out-dir results/full-benchmark-20260421_034557/charts
 ```
 
 Charts are saved as numbered PNGs:
@@ -233,57 +233,59 @@ docker compose down
 | `-join` | (empty) | HTTP address of cluster member to join |
 | `-join-retries` | `10` | Retry attempts when joining fails |
 
-## Benchmark Results (AWS, 2026-04-20)
+## Benchmark Results (AWS, 2026-04-21)
 
-Full test matrix: **3 / 5 / 7 nodes × same-region / cross-region × QUIC / TCP**, 500 writes per run.
-Infrastructure: `t3.micro` instances; same-region = `us-east-1`; cross-region = HK + US-East + EU-West.
+Source: `results/full-benchmark-20260421_034557/`  
+Matrix: **3 / 5 / 7 nodes × same-region / cross-region × QUIC / TCP**  
+Workload: **500 writes**, duration **300s**, monitor enabled  
+Infrastructure: `t3.micro`; same-region = `us-east-1`; cross-region = `us-east-1` + `us-west-2` + `eu-west-1`
 
 ### Write Throughput (ops/s)
 
 | Nodes | QUIC same-region | TCP same-region | QUIC cross-region | TCP cross-region |
 |-------|-----------------|-----------------|-------------------|-----------------|
-| 3     | 0.31            | **1.74**        | 0.35              | **1.33**        |
-| 5     | 0.27            | **1.73**        | 0.25              | **1.74**        |
-| 7     | 0.13            | **1.73**        | 0.29              | **1.80**        |
+| 3     | 1.60            | **1.77**        | 1.48              | **1.55**        |
+| 5     | 1.55            | **1.78**        | 1.45              | **1.59**        |
+| 7     | 1.46            | **1.77**        | 1.44              | **1.59**        |
 
-### Write Latency P99 (ms) — successful writes only
+### Write Latency P99 (ms)
 
 | Nodes | QUIC same-region | TCP same-region | QUIC cross-region | TCP cross-region |
 |-------|-----------------|-----------------|-------------------|-----------------|
-| 3     | 651             | 838             | 707               | 775             |
-| 5     | 582             | 723             | 638               | 1551            |
-| 7     | 834             | 828             | 902               | 610             |
+| 3     | 636             | **599**         | 919               | **693**         |
+| 5     | 637             | **600**         | 817               | **661**         |
+| 7     | 635             | **602**         | 663               | **658**         |
 
 ### Read Throughput (ops/s)
 
-Both protocols are consistently **~1.7–1.8 ops/s** across all cluster sizes and deployment scenarios.
+| Nodes | QUIC same-region | TCP same-region | QUIC cross-region | TCP cross-region |
+|-------|-----------------|-----------------|-------------------|-----------------|
+| 3     | 1.78            | 1.78            | 1.36              | 1.77            |
+| 5     | 1.78            | 1.77            | 1.37              | 1.77            |
+| 7     | 1.78            | 1.77            | 1.78              | 1.78            |
 
-### Write Errors (out of 500 writes)
+### Write Errors / Retries
 
-| Protocol | same-region | cross-region |
-|----------|-------------|--------------|
-| QUIC     | 412–461     | 394–427      |
-| TCP      | 0           | 0            |
+- Write errors: **0/6000** (all 12 runs, both protocols)
+- QUIC retries: **64**, all recovered (**64/64**)
+- TCP retries: **1**, recovered (**1/1**)
 
 ## Key Findings
 
-1. **QUIC write throughput is 4–13× lower than TCP.**
-   QUIC consistently produced ~400 write errors per 500 attempts (~80% error rate), collapsing effective throughput to 0.13–0.35 ops/s vs TCP's stable 1.3–1.8 ops/s. The root cause is a retry storm: failed writes are retried, serialising what should be parallel streams.
+1. **QUIC and TCP are now both stable in write path.**  
+   The previous large-scale QUIC write failure no longer appears in this full matrix: all runs completed with zero write errors.
 
-2. **Read throughput is equivalent between QUIC and TCP.**
-   Reads bypass Raft log replication and go directly to the FSM, so the transport layer overhead does not surface. Both protocols sustain ~1.75 ops/s.
+2. **TCP still leads write throughput, but the gap is moderate.**  
+   Case-by-case TCP/QUIC write-throughput ratio is **1.05–1.21** (average **1.12**), i.e. TCP is typically about 5–21% faster.
 
-3. **When writes succeed, QUIC P99 latency is competitive with TCP.**
-   Across most scenarios QUIC P99 is within ±200 ms of TCP P99. In the same-region 3-node case, QUIC P99 (651 ms) is actually 23% lower than TCP P99 (838 ms), suggesting QUIC's built-in TLS and 0-RTT handshake reduce per-stream setup cost.
+3. **P99 write latency is generally lower on TCP in this run.**  
+   TCP has lower P99 in 5/6 scenario-size combinations; largest gap is cross-region 3-node (**919 ms vs 693 ms**).
 
-4. **Cluster scale hurts QUIC more than TCP (same-region).**
-   TCP write throughput is flat at ~1.73 ops/s regardless of cluster size. QUIC degrades from 0.31 → 0.27 → 0.13 ops/s as nodes grow from 3 → 5 → 7, a 12.9× gap at 7 nodes. More nodes means more AppendEntries streams per write, amplifying the error rate.
+4. **Read throughput is close in same-region, mixed in cross-region.**  
+   Same-region reads are nearly identical (~1.77–1.78 ops/s). In cross-region, QUIC is lower at 3/5 nodes (~1.36–1.37 ops/s), but converges at 7 nodes.
 
-5. **Cross-region deployment does not worsen QUIC's relative position.**
-   QUIC's error rate is high in both scenarios, so the additional cross-region RTT (~100–200 ms) is masked by the existing retry overhead. TCP cross-region P99 occasionally spikes (1551 ms at 5 nodes), while QUIC P99 remains more stable, likely because QUIC handles packet loss and reordering natively.
-
-6. **The QUIC transport implementation requires debugging.**
-   The high write error rate is not an inherent QUIC limitation — it points to a bug in stream lifecycle management or error handling in `transport/transport.go`. Fixing this is the highest-priority next step before any further performance comparison is meaningful.
+5. **Scale impact is visible for QUIC in same-region writes.**  
+   QUIC same-region write throughput drops from **1.60 → 1.46 ops/s** when scaling 3 → 7 nodes, while TCP remains around **1.77–1.78 ops/s**.
 
 ## Troubleshooting
 
