@@ -60,7 +60,17 @@ def _node_labels(cluster_sizes):
     return [f"{s} nodes" for s in cluster_sizes]
 
 
-def _grouped_bars(ax, df_sub, metric, protocols, cluster_sizes, ylabel, title, fmt="{:.2f}"):
+def _legend_outside(ax, fontsize=8, ncol=1):
+    ax.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        borderaxespad=0.0,
+        fontsize=fontsize,
+        ncol=ncol,
+    )
+
+
+def _grouped_bars(ax, df_sub, metric, protocols, cluster_sizes, ylabel, title, fmt="{:.2f}", show_legend=True):
     x = np.arange(len(cluster_sizes))
     w = 0.35
     for i, proto in enumerate(protocols):
@@ -76,7 +86,8 @@ def _grouped_bars(ax, df_sub, metric, protocols, cluster_sizes, ylabel, title, f
     ax.set_ylabel(ylabel)
     ax.set_xticks(x)
     ax.set_xticklabels(_node_labels(cluster_sizes))
-    ax.legend(loc="upper right")
+    if show_legend:
+        _legend_outside(ax)
     ax.yaxis.set_minor_locator(mticker.AutoMinorLocator())
     ax.grid(axis="y", linestyle="--", alpha=0.5, zorder=0)
     ax.set_axisbelow(True)
@@ -93,8 +104,10 @@ def chart_write_throughput(df, protocols, cluster_sizes, scenarios, out_dir):
         _grouped_bars(ax, df[df["scenario"] == scenario],
                       "write_throughput", protocols, cluster_sizes,
                       "Write Throughput (ops/s)",
-                      SCENARIO_LABELS[scenario])
-    fig.tight_layout()
+                      SCENARIO_LABELS[scenario], show_legend=False)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="center left", bbox_to_anchor=(1.0, 0.5), frameon=False)
+    fig.tight_layout(rect=(0, 0, 0.86, 1))
     _save(fig, out_dir, "01_write_throughput.png")
 
 
@@ -123,9 +136,10 @@ def chart_write_latency(df, protocols, cluster_sizes, scenarios, out_dir):
         ax.set_xlabel("Cluster Size")
         ax.set_xticks(x)
         ax.set_xticklabels(_node_labels(cluster_sizes))
-        ax.legend(fontsize=7, ncol=2, loc="upper left")
         ax.grid(linestyle="--", alpha=0.5)
-    fig.tight_layout()
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="center left", bbox_to_anchor=(1.0, 0.5), frameon=False, fontsize=7, ncol=1)
+    fig.tight_layout(rect=(0, 0, 0.84, 1))
     _save(fig, out_dir, "02_write_latency_percentiles.png")
 
 
@@ -140,8 +154,10 @@ def chart_read_throughput(df, protocols, cluster_sizes, scenarios, out_dir):
         _grouped_bars(ax, df[df["scenario"] == scenario],
                       "read_throughput", protocols, cluster_sizes,
                       "Read Throughput (ops/s)",
-                      SCENARIO_LABELS[scenario])
-    fig.tight_layout()
+                      SCENARIO_LABELS[scenario], show_legend=False)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="center left", bbox_to_anchor=(1.0, 0.5), frameon=False)
+    fig.tight_layout(rect=(0, 0, 0.86, 1))
     _save(fig, out_dir, "03_read_throughput.png")
 
 
@@ -173,10 +189,10 @@ def chart_throughput_ratio(df, protocols, cluster_sizes, scenarios, out_dir):
     ax.set_xlabel("Cluster Size")
     ax.set_xticks(x)
     ax.set_xticklabels(_node_labels(cluster_sizes))
-    ax.legend()
+    _legend_outside(ax)
     ax.grid(axis="y", linestyle="--", alpha=0.5, zorder=0)
     ax.set_axisbelow(True)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 0.84, 1))
     _save(fig, out_dir, "04_throughput_ratio.png")
 
 
@@ -227,9 +243,9 @@ def chart_scalability(df, protocols, cluster_sizes, scenarios, out_dir):
     ax.set_xlabel("Cluster Size (nodes)")
     ax.set_ylabel("Write Throughput (ops/s)")
     ax.set_xticks(cluster_sizes)
-    ax.legend(fontsize=7.5, ncol=2)
+    _legend_outside(ax, fontsize=7.5, ncol=1)
     ax.grid(linestyle="--", alpha=0.5)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 0.84, 1))
     _save(fig, out_dir, "06_write_throughput_scalability.png")
 
 
@@ -256,10 +272,10 @@ def chart_cross_region_latency_delta(df, protocols, cluster_sizes, out_dir):
     ax.set_xlabel("Cluster Size")
     ax.set_xticks(x)
     ax.set_xticklabels(_node_labels(cluster_sizes))
-    ax.legend()
+    _legend_outside(ax)
     ax.grid(axis="y", linestyle="--", alpha=0.5, zorder=0)
     ax.set_axisbelow(True)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 0.84, 1))
     _save(fig, out_dir, "07_cross_region_p99_delta.png")
 
 

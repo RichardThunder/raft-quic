@@ -956,8 +956,36 @@ ssh_user = "ec2-user"
 [*] 上传二进制到 S3（供 SSM 拉取）...
 /Users/richard/code/raft-quic/scripts/distributed_benchmark.py:267: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
   suffix = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{os.getpid()}-{self.scenario}-{self.cluster_size}"
-Completed 1.0 MiB/13.2 MiB (908.3 KiB/s) with 1 file(s) remainingCompleted 2.0 MiB/13.2 MiB (1.5 MiB/s) with 1 file(s) remaining  Completed 3.0 MiB/13.2 MiB (2.1 MiB/s) with 1 file(s) remaining  Completed 4.0 MiB/13.2 MiB (2.7 MiB/s) with 1 file(s) remaining  Completed 5.0 MiB/13.2 MiB (3.4 MiB/s) with 1 file(s) remaining  Completed 6.0 MiB/13.2 MiB (3.9 MiB/s) with 1 file(s) remaining  Completed 7.0 MiB/13.2 MiB (4.4 MiB/s) with 1 file(s) remaining  Completed 8.0 MiB/13.2 MiB (4.7 MiB/s) with 1 file(s) remaining  Completed 9.0 MiB/13.2 MiB (5.2 MiB/s) with 1 file(s) remaining  Completed 10.0 MiB/13.2 MiB (5.1 MiB/s) with 1 file(s) remaining Completed 11.0 MiB/13.2 MiB (3.8 MiB/s) with 1 file(s) remaining Completed 12.0 MiB/13.2 MiB (3.9 MiB/s) with 1 file(s) remaining Completed 13.0 MiB/13.2 MiB (4.0 MiB/s) with 1 file(s) remaining Completed 13.2 MiB/13.2 MiB (3.4 MiB/s) with 1 file(s) remaining upload: ./raftd-linux-amd64 to s3://raft-quic-artifacts-560449670342-us-east-1/distributed-benchmark/20260420194740-24090-same-region-3/raftd-linux-amd64
-Completed 1.0 MiB/13.2 MiB (906.1 KiB/s) with 1 file(s) remainingCompleted 2.0 MiB/13.2 MiB (1.5 MiB/s) with 1 file(s) remaining  Completed 3.0 MiB/13.2 MiB (2.1 MiB/s) with 1 file(s) remaining  Completed 4.0 MiB/13.2 MiB (2.8 MiB/s) with 1 file(s) remaining  Completed 5.0 MiB/13.2 MiB (3.3 MiB/s) with 1 file(s) remaining  Completed 6.0 MiB/13.2 MiB (3.9 MiB/s) with 1 file(s) remaining  Completed 7.0 MiB/13.2 MiB (4.2 MiB/s) with 1 file(s) remaining  Completed 8.0 MiB/13.2 MiB (4.7 MiB/s) with 1 file(s) remaining  Completed 9.0 MiB/13.2 MiB (5.2 MiB/s) with 1 file(s) remaining  Completed 10.0 MiB/13.2 MiB (5.1 MiB/s) with 1 file(s) remaining Completed 11.0 MiB/13.2 MiB (5.4 MiB/s) with 1 file(s) remaining Completed 12.0 MiB/13.2 MiB (5.9 MiB/s) with 1 file(s) remaining Completed 13.0 MiB/13.2 MiB (6.3 MiB/s) with 1 file(s) remaining Completed 13.2 MiB/13.2 MiB (4.3 MiB/s) with 1 file(s) remaining upload: cmd/tcp-server/tcp-server-linux-amd64 to s3://raft-quic-artifacts-560449670342-us-east-1/distributed-benchmark/20260420194740-24090-same-region-3/tcp-server-linux-amd64
+Completed 1.0 MiB/13.2 MiB (908.3 KiB/s) with 1 file(s) remaining
+Completed 2.0 MiB/13.2 MiB (1.5 MiB/s) with 1 file(s) remaining  
+Completed 3.0 MiB/13.2 MiB (2.1 MiB/s) with 1 file(s) remaining  
+Completed 4.0 MiB/13.2 MiB (2.7 MiB/s) with 1 file(s) remaining  
+Completed 5.0 MiB/13.2 MiB (3.4 MiB/s) with 1 file(s) remaining  
+Completed 6.0 MiB/13.2 MiB (3.9 MiB/s) with 1 file(s) remaining  
+Completed 7.0 MiB/13.2 MiB (4.4 MiB/s) with 1 file(s) remaining  
+Completed 8.0 MiB/13.2 MiB (4.7 MiB/s) with 1 file(s) remaining  
+Completed 9.0 MiB/13.2 MiB (5.2 MiB/s) with 1 file(s) remaining  
+Completed 10.0 MiB/13.2 MiB (5.1 MiB/s) with 1 file(s) remaining 
+Completed 11.0 MiB/13.2 MiB (3.8 MiB/s) with 1 file(s) remaining 
+Completed 12.0 MiB/13.2 MiB (3.9 MiB/s) with 1 file(s) remaining 
+Completed 13.0 MiB/13.2 MiB (4.0 MiB/s) with 1 file(s) remaining 
+Completed 13.2 MiB/13.2 MiB (3.4 MiB/s) with 1 file(s) remaining 
+upload: ./raftd-linux-amd64 to s3://raft-quic-artifacts-560449670342-us-east-1/distributed-benchmark/20260420194740-24090-same-region-3/raftd-linux-amd64
+Completed 1.0 MiB/13.2 MiB (906.1 KiB/s) with 1 file(s) remaining
+Completed 2.0 MiB/13.2 MiB (1.5 MiB/s) with 1 file(s) remaining  
+Completed 3.0 MiB/13.2 MiB (2.1 MiB/s) with 1 file(s) remaining  
+Completed 4.0 MiB/13.2 MiB (2.8 MiB/s) with 1 file(s) remaining  
+Completed 5.0 MiB/13.2 MiB (3.3 MiB/s) with 1 file(s) remaining  
+Completed 6.0 MiB/13.2 MiB (3.9 MiB/s) with 1 file(s) remaining  
+Completed 7.0 MiB/13.2 MiB (4.2 MiB/s) with 1 file(s) remaining  
+Completed 8.0 MiB/13.2 MiB (4.7 MiB/s) with 1 file(s) remaining  
+Completed 9.0 MiB/13.2 MiB (5.2 MiB/s) with 1 file(s) remaining  
+Completed 10.0 MiB/13.2 MiB (5.1 MiB/s) with 1 file(s) remaining 
+Completed 11.0 MiB/13.2 MiB (5.4 MiB/s) with 1 file(s) remaining 
+Completed 12.0 MiB/13.2 MiB (5.9 MiB/s) with 1 file(s) remaining 
+Completed 13.0 MiB/13.2 MiB (6.3 MiB/s) with 1 file(s) remaining 
+Completed 13.2 MiB/13.2 MiB (4.3 MiB/s) with 1 file(s) remaining 
+upload: cmd/tcp-server/tcp-server-linux-amd64 to s3://raft-quic-artifacts-560449670342-us-east-1/distributed-benchmark/20260420194740-24090-same-region-3/tcp-server-linux-amd64
 [+] 二进制已上传并生成预签名下载链接
 [*] 等待 SSM 就绪: node1 (i-00837e974313e9723, us-east-1)
 [+] SSM 就绪: node1
