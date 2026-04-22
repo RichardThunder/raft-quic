@@ -43,6 +43,34 @@ die()     { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 
 # ── Prerequisite checks ────────────────────────────────────────────────────────
 check_cmd() { command -v "$1" &>/dev/null || die "'$1' not found. Install it first."; }
+check_aws_auth() {
+  info "Validating AWS credentials with STS …"
+  if ! aws sts get-caller-identity >/dev/null 2>&1; then
+    die "AWS credentials are invalid or expired. Fix ~/.aws/credentials or your active profile, then retry. Useful checks: 'aws configure list', 'aws sts get-caller-identity', or 'aws sso login'."
+  fi
+  success "AWS credentials are valid"
+}
+check_aws_ec2_read_access() {
+  local -a regions=()
+  if [[ "$SCENARIO" == "cross-region" ]]; then
+    regions=("us-east-1" "us-west-2" "eu-west-1")
+  else
+    regions=("us-east-1")
+  fi
+
+  for region in "${regions[@]}"; do
+    info "Checking EC2 image lookup permission in ${region} …"
+    if ! aws ec2 describe-images \
+      --region "$region" \
+      --owners amazon \
+      --filters "Name=name,Values=al2023-ami-*-x86_64" "Name=virtualization-type,Values=hvm" \
+      --max-items 1 >/dev/null 2>&1; then
+      die "Missing EC2 read permissions in ${region}. This deploy needs at least 'ec2:DescribeImages' there before Terraform can resolve the Amazon Linux 2023 AMI."
+    fi
+  done
+  success "EC2 image lookup permissions are present"
+}
+
 check_cmd terraform
 check_cmd go
 check_cmd ssh
@@ -50,6 +78,8 @@ check_cmd scp
 check_cmd python3
 check_cmd curl
 check_cmd aws
+check_aws_auth
+check_aws_ec2_read_access
 
 info "Scenario : $SCENARIO"
 info "HB timeout: $HB_TIMEOUT  |  Election timeout: $EL_TIMEOUT"
