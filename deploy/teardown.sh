@@ -15,6 +15,18 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
 info() { echo -e "${CYAN}[INFO]${NC}  $*"; }
 success() { echo -e "${GREEN}[OK]${NC}    $*"; }
 die()  { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
+check_cmd() { command -v "$1" &>/dev/null || die "'$1' not found. Install it first."; }
+check_aws_auth() {
+  info "Validating AWS credentials with STS …"
+  if ! aws sts get-caller-identity >/dev/null 2>&1; then
+    die "AWS credentials are invalid or expired. Fix ~/.aws/credentials or your active profile, then retry. Useful checks: 'aws configure list', 'aws sts get-caller-identity', or 'aws sso login'."
+  fi
+  success "AWS credentials are valid"
+}
+
+check_cmd terraform
+check_cmd aws
+check_aws_auth
 
 # Try to stop raftd gracefully before destroying instances.
 if [[ -f "$ENV_FILE" ]]; then

@@ -1,0 +1,181 @@
+\appendices
+\section{Artifact Appendix}
+\label{appendix:artifact}
+
+This appendix describes how to reproduce the Raft-over-QUIC artifact from the repository root. The artifact supports three levels of reproduction: a local three-node cluster for functional validation, a Docker-based deployment for automated testing, and an AWS-based deployment for distributed benchmarking. Unless otherwise stated, all commands are executed from the project root directory.
+
+\subsection{Artifact Scope and Requirements}
+
+The implementation is written in Go and exposes a Raft key-value service over HTTP while using QUIC as the inter-node transport. The minimum software requirements are:
+\begin{itemize}
+\item Go 1.23 or newer,
+\item \texttt{git},
+\item \texttt{curl} for API verification,
+\item Docker and Docker Compose for the containerized workflow,
+\item Terraform 1.5 or newer, AWS CLI credentials, and \texttt{python3} for the distributed benchmark workflow.
+\end{itemize}
+
+The fastest reproduction path is the local three-node setup, which validates leader election, replicated writes, and failover behavior on a single machine. The AWS workflow reproduces the larger experimental setting used for performance evaluation.
+
+\subsection{Local Reproduction of a Three-Node Cluster}
+
+The local workflow builds the main server binary and launches three Raft nodes on loopback addresses.
+
+\begin{enumerate}
+\item Fetch dependencies and build the server:
+\begin{verbatim}
+go mod download
+go build ./cmd/raftd
+\end{verbatim}
+
+\item Start the bootstrap node in the first terminal:
+\begin{verbatim}
+./raftd -id node1 -bind 127.0.0.1:7001 -http 127.0.0.1:8001
+\end{verbatim}
+
+\item Start the second node in a new terminal and join the first node through its HTTP endpoint:
+\begin{verbatim}
+./raftd -id node2 -bind 127.0.0.1:7002 -http 127.0.0.1:8002 \
+  -join 127.0.0.1:8001
+\end{verbatim}
+
+\item Start the third node in another terminal:
+\begin{verbatim}
+./raftd -id node3 -bind 127.0.0.1:7003 -http 127.0.0.1:8003 \
+  -join 127.0.0.1:8001
+\end{verbatim}
+\end{enumerate}
+
+The \texttt{-join} flag must reference the HTTP address of an existing cluster member rather than its QUIC port. After approximately 500~ms, one node should become leader.
+
+\subsection{Functional Verification}
+
+After the cluster is running, the following commands verify the expected behavior:
+\begin{enumerate}
+\item Write a key-value pair to the cluster leader:
+\begin{verbatim}
+curl -X POST "http://127.0.0.1:8001/set?key=hello&value=world"
+\end{verbatim}
+
+\item Read the replicated value from another node:
+\begin{verbatim}
+curl "http://127.0.0.1:8002/get?key=hello"
+\end{verbatim}
+
+\item Query the current leader:
+\begin{verbatim}
+curl "http://127.0.0.1:8002/leader"
+\end{verbatim}
+
+\item Terminate the first node manually, wait roughly 400~ms, and query again:
+\begin{verbatim}
+curl "http://127.0.0.1:8002/leader"
+\end{verbatim}
+
+\item Write through the new leader and confirm that the value is visible from another node:
+\begin{verbatim}
+curl -X POST "http://127.0.0.1:8002/set?key=after&value=failover"
+curl "http://127.0.0.1:8003/get?key=after"
+\end{verbatim}
+\end{enumerate}
+
+Successful execution demonstrates the core claims of the artifact: leader election, replicated writes, follower reads, and continued service after leader failure.
+
+\subsection{Docker-Based Reproduction}
+
+For a more automated setup, the repository also provides a Docker deployment:
+\begin{verbatim}
+docker compose up --build -d
+docker compose ps
+./scripts/test_cluster.sh
+\end{verbatim}
+
+The script \texttt{scripts/test\_cluster.sh} performs readiness checks, leader detection, writes to the leader, follower rejection checks, consistency validation, failover testing, and node recovery testing. A successful run should finish with zero failed tests. After validation, the containers can be removed with:
+\begin{verbatim}
+docker compose down
+\end{verbatim}
+
+\subsection{Reproducing the AWS Distributed Benchmark}
+
+The distributed evaluation requires configured AWS credentials and Terraform. The benchmark scripts build Linux binaries, provision EC2 instances, deploy the cluster, execute QUIC and TCP benchmark cases, and store the results under the \texttt{results/} directory.
+
+\subsubsection{Environment Preparation}
+
+Verify the required tools:
+\begin{verbatim}
+aws configure
+terraform -version
+go version
+\end{verbatim}
+
+\subsubsection{Cluster Deployment}
+
+To deploy a same-region three-node cluster:
+\begin{verbatim}
+./deploy/deploy.sh same-region
+\end{verbatim}
+
+To deploy a cross-region cluster:
+\begin{verbatim}
+./deploy/deploy.sh cross-region
+\end{verbatim}
+
+The deployment script writes a cluster environment file that is consumed by the benchmark scripts.
+
+\subsubsection{Benchmark Execution}
+
+To reproduce the full benchmark matrix used in the project evaluation:
+\begin{verbatim}
+bash scripts/aws_distributed_test.sh \
+  --cluster-sizes 3,5,7 \
+  --scenarios same-region,cross-region \
+  --writes 500 \
+  --duration 300 \
+  --monitor
+\end{verbatim}
+
+For a lightweight smoke test that is cheaper and faster to execute:
+\begin{verbatim}
+bash scripts/aws_distributed_test.sh \
+  --cluster-sizes 3 \
+  --scenarios same-region \
+  --writes 5 \
+  --duration 5 \
+  --monitor
+\end{verbatim}
+
+Each run writes logs, raw benchmark outputs, and optional metrics to a timestamped directory of the form \texttt{results/distributed\_test\_<timestamp>/}. This directory is the main artifact generated by the evaluation pipeline.
+
+\subsubsection{Result Visualization}
+
+The benchmark output can be converted into charts with:
+\begin{verbatim}
+conda run -n base python3 scripts/visualize_benchmark.py \
+  --results-dir results/<benchmark-directory> \
+  --out-dir results/<benchmark-directory>/charts
+\end{verbatim}
+
+This step generates the figures used to inspect throughput, latency percentiles, scalability, and error counts.
+
+\subsection{Cleanup and Practical Notes}
+
+After AWS experiments complete, provisioned infrastructure should be removed to avoid unnecessary cloud cost:
+\begin{verbatim}
+./deploy/teardown.sh same-region
+./deploy/teardown.sh cross-region
+\end{verbatim}
+
+Several operational details are important during reproduction. First, the bootstrap node may need a short delay before followers join, because leader election must complete before write traffic is accepted. Second, writes must be sent to the current leader; the \texttt{/leader} endpoint can be queried when a request returns \texttt{not leader}. Third, the transport uses UDP because QUIC is implemented above UDP, so local firewalls or VPN software may interfere with loopback execution on some systems.
+
+\subsection{Expected Reproduction Outcome}
+
+At minimum, a successful reproduction should satisfy the following conditions:
+\begin{itemize}
+\item a three-node cluster starts successfully,
+\item one node becomes leader and accepts writes,
+\item written values can be read from other nodes,
+\item leader failure triggers re-election and continued service,
+\item the AWS benchmark pipeline produces a timestamped result directory containing logs, CSV outputs, and optional plots.
+\end{itemize}
+
+These steps are sufficient for an evaluator to reproduce the functional behavior of the system and, when cloud resources are available, the distributed benchmark workflow used in the report.
